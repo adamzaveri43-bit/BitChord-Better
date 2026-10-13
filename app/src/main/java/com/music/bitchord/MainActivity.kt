@@ -4312,6 +4312,10 @@ private fun BitChordApp(
                 // and drag handle included — see SongActionsSheet.
                 containerColor = Color.Transparent,
                 dragHandle = null,
+                // The sheet pads its own rows clear of the navigation bar.
+                // Left to M3, the padding sits outside the tinted sheet: a
+                // bare strip at the foot, and the rows cut off above it.
+                contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
             ) {
                 songMenuBody(song, SongActionsPresentation.Sheet)
             }

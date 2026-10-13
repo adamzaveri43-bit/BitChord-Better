@@ -9,6 +9,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,7 +77,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -461,7 +469,14 @@ private fun TintedSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val maxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.85f
+    // Measured against the window itself, less the status bar the sheet must
+    // stay below. `screenHeightDp` is not that: depending on the API level it
+    // includes or excludes the system bars, so a fixed fraction of it either
+    // wastes room or pushes the sheet's foot below the visible window.
+    val density = LocalDensity.current
+    val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
+    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val maxHeight = (windowHeight - statusBar) * 0.9f
     Box(
         modifier
             .fillMaxWidth()
@@ -498,7 +513,11 @@ private fun TintedSheet(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    // Inside the scroll rather than around it: the wash runs
+                    // down behind the navigation bar, and the last row can
+                    // still scroll clear of it instead of sitting underneath.
+                    .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
                 content = content,
             )
         }
