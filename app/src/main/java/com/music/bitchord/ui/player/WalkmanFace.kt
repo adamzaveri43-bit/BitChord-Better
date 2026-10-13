@@ -276,8 +276,8 @@ private class Layout(gridH0: Float) {
     val bottomHubY = winY + winH - 58f
     val panelW = 66f
     val panelX = cx - panelW / 2f
-    val panelY = topHubY + 40f
-    val panelH = bottomHubY - topHubY - 80f
+    val panelY = topHubY + 46f
+    val panelH = bottomHubY - topHubY - 92f
     val walkmanY = winY + winH + 30f + e * 0.2f
     val arrowCx = 258f
     val arrowY = winY + winH * 0.4f
@@ -463,8 +463,12 @@ private const val SIDE_KEY_X = 349f
 private const val SIDE_KEY_W = 48f
 private const val SIDE_KEY_H = 74f
 private const val SIDE_KEY_STEP = 92f
-private const val HUB_R = 18f
-private const val FULL_R = 40f
+/**
+ * A pack's radius runs from just past the hub's copper ring, so an all-but-empty
+ * reel still shows its thin ring of tape, to nearly the window's edge when full.
+ */
+private const val HUB_R = 23f
+private const val FULL_R = 42f
 private const val SPECKS = 1400
 /** Tape speed in grid units a second: about half a turn a second off a bare hub. */
 private const val TAPE_SPEED = 55f
