@@ -73,6 +73,8 @@ import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import com.music.bitchord.data.settings.PlayerStyle
+import com.music.bitchord.data.settings.IdleScreenMode
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.SmartDisplay
@@ -237,6 +239,8 @@ fun SettingsScreen(
     val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
     val hideVolumeBar by AppSettings.hideVolumeBar.collectAsStateWithLifecycle()
     val playerStyle by AppSettings.playerStyle.collectAsStateWithLifecycle()
+    val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
+    val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
     val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
     val swipeToPlayNext by AppSettings.swipeToPlayNext.collectAsStateWithLifecycle()
     val dontRepeatSuggestions by AppSettings.dontRepeatSuggestions.collectAsStateWithLifecycle()
@@ -1313,6 +1317,44 @@ fun SettingsScreen(
                     onSelect = { AppSettings.setPlayerStyle(PlayerStyle.entries[it]) },
                     modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
+            }
+            val idleScreenTitle = stringResource(R.string.idle_screen)
+            row(idleScreenTitle, "aod", "always on", "always-on display", "idle", "lock screen", "clock", "walkman") {
+                SettingsRow(
+                    icon = Icons.Rounded.Bedtime,
+                    title = idleScreenTitle,
+                    subtitle = stringResource(R.string.idle_screen_subtitle),
+                )
+                SegmentedControl(
+                    options = listOf(
+                        stringResource(R.string.idle_screen_off),
+                        stringResource(R.string.idle_screen_apple_music),
+                        stringResource(R.string.player_style_walkman),
+                    ),
+                    selectedIndex = IdleScreenMode.entries.indexOf(idleScreenMode),
+                    onSelect = { AppSettings.setIdleScreenMode(IdleScreenMode.entries[it]) },
+                    modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 10.dp),
+                )
+                if (idleScreenMode != IdleScreenMode.OFF) {
+                    Text(
+                        text = stringResource(R.string.idle_screen_delay),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = TEXT_INSET, bottom = 6.dp),
+                    )
+                    SegmentedControl(
+                        options = AppSettings.IDLE_SCREEN_DELAYS.map { seconds ->
+                            if (seconds == 60) {
+                                stringResource(R.string.idle_screen_minute)
+                            } else {
+                                stringResource(R.string.idle_screen_seconds, seconds)
+                            }
+                        },
+                        selectedIndex = AppSettings.IDLE_SCREEN_DELAYS.indexOf(idleScreenDelay),
+                        onSelect = { AppSettings.setIdleScreenDelaySeconds(AppSettings.IDLE_SCREEN_DELAYS[it]) },
+                        modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
+                    )
+                }
             }
             val hideVolumeBarTitle = stringResource(R.string.hide_volume_bar)
             row(hideVolumeBarTitle, "volume", "player") {

@@ -338,6 +338,13 @@
     <string name="player_style_modern">Modern</string>
     <string name="player_style_ipod">iPod</string>
     <string name="player_style_walkman">Walkman</string>
+    <string name="idle_screen">Idle screen</string>
+    <string name="idle_screen_subtitle">While music plays, a dim always-on face takes over once you stop touching the phone. Keeps the screen on while playing.</string>
+    <string name="idle_screen_off">Off</string>
+    <string name="idle_screen_apple_music">Apple Music</string>
+    <string name="idle_screen_delay">Show after</string>
+    <string name="idle_screen_seconds">%1$d s</string>
+    <string name="idle_screen_minute">1 min</string>
     <string name="walkman_face_title">STEREO CASSETTE PLAYER</string>
     <string name="walkman_face_subtitle">METAL · CrO₂ · NORMAL</string>
     <string name="walkman_volume">VOLUME</string>

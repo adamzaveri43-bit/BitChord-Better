@@ -126,6 +126,17 @@ enum class PlayerStyle {
     WALKMAN,
 }
 
+/** The always-on face shown while music plays and the phone sits idle. */
+enum class IdleScreenMode {
+    OFF,
+
+    /** The iPhone's always-on lock screen: clock, date, dimmed artwork. */
+    APPLE_MUSIC,
+
+    /** The cassette player, dimmed. */
+    WALKMAN,
+}
+
 /** Stable persisted ordering for each on-device music library. */
 enum class LocalMusicSort {
     TITLE_ASC,
@@ -379,6 +390,12 @@ object AppSettings {
 
     /** Hides the volume slider on the main player, leaving the rest of the layout to reflow. */
     val hideVolumeBar = MutableStateFlow(false)
+
+    /** Which always-on face takes over while music plays and nobody touches the phone. */
+    val idleScreenMode = MutableStateFlow(IdleScreenMode.OFF)
+
+    /** How long without a touch before [idleScreenMode]'s face comes up. */
+    val idleScreenDelaySeconds = MutableStateFlow(DEFAULT_IDLE_SCREEN_DELAY)
 
     /** Which face the full-screen player wears. */
     val playerStyle = MutableStateFlow(PlayerStyle.MODERN)
@@ -843,6 +860,11 @@ object AppSettings {
         stopOnTaskRemoved.value = prefs.getBoolean(KEY_STOP_ON_TASK_REMOVED, false)
         hideVolumeBar.value = prefs.getBoolean(KEY_HIDE_VOLUME_BAR, false)
         hideSongStatus.value = prefs.getBoolean(KEY_HIDE_SONG_STATUS, false)
+        idleScreenMode.value = runCatching {
+            IdleScreenMode.valueOf(prefs.getString(KEY_IDLE_SCREEN_MODE, null) ?: IdleScreenMode.OFF.name)
+        }.getOrDefault(IdleScreenMode.OFF)
+        idleScreenDelaySeconds.value = prefs.getInt(KEY_IDLE_SCREEN_DELAY, DEFAULT_IDLE_SCREEN_DELAY)
+            .takeIf { it in IDLE_SCREEN_DELAYS } ?: DEFAULT_IDLE_SCREEN_DELAY
         playerStyle.value = runCatching {
             PlayerStyle.valueOf(prefs.getString(KEY_PLAYER_STYLE, null) ?: PlayerStyle.MODERN.name)
         }.getOrDefault(PlayerStyle.MODERN)
@@ -1206,6 +1228,16 @@ object AppSettings {
     fun setStopOnTaskRemoved(value: Boolean) {
         stopOnTaskRemoved.value = value
         prefs.edit().putBoolean(KEY_STOP_ON_TASK_REMOVED, value).apply()
+    }
+
+    fun setIdleScreenMode(value: IdleScreenMode) {
+        idleScreenMode.value = value
+        prefs.edit().putString(KEY_IDLE_SCREEN_MODE, value.name).apply()
+    }
+
+    fun setIdleScreenDelaySeconds(value: Int) {
+        idleScreenDelaySeconds.value = value
+        prefs.edit().putInt(KEY_IDLE_SCREEN_DELAY, value).apply()
     }
 
     fun setPlayerStyle(value: PlayerStyle) {
@@ -1977,6 +2009,12 @@ object AppSettings {
     private const val KEY_STOP_ON_TASK_REMOVED = "stop_on_task_removed"
     private const val KEY_HIDE_VOLUME_BAR = "hide_volume_bar"
     private const val KEY_PLAYER_STYLE = "player_style"
+    private const val KEY_IDLE_SCREEN_MODE = "idle_screen_mode"
+    private const val KEY_IDLE_SCREEN_DELAY = "idle_screen_delay"
+
+    /** The choices offered for [idleScreenDelaySeconds]. */
+    val IDLE_SCREEN_DELAYS = listOf(15, 30, 60)
+    private const val DEFAULT_IDLE_SCREEN_DELAY = 30
     private const val KEY_HIDE_SONG_STATUS = "hide_song_status"
     private const val KEY_SWIPE_TO_PLAY_NEXT = "swipe_to_play_next"
     private const val KEY_DONT_REPEAT_SUGGESTIONS = "dont_repeat_suggestions"

@@ -265,6 +265,11 @@ import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.ui.player.NowPlayingScreen
 import com.music.bitchord.ui.player.IpodPlayer
 import com.music.bitchord.ui.player.WalkmanPlayer
+import com.music.bitchord.ui.player.IdleActivity
+import com.music.bitchord.ui.player.IdleFace
+import com.music.bitchord.ui.player.IdleScreenHost
+import com.music.bitchord.ui.player.pokeIdleOnTouch
+import com.music.bitchord.data.settings.IdleScreenMode
 import com.music.bitchord.data.settings.PlayerStyle
 import com.music.bitchord.ui.player.PlayerSheetMotion
 import androidx.compose.ui.geometry.Offset
@@ -431,6 +436,13 @@ class MainActivity : AppCompatActivity() {
      * running a second tap on the widget does not rebuild anything — it arrives
      * here, and [onCreate] never runs again.
      */
+    // Touches and keys anywhere in the activity's own window hold off the
+    // idle screen. The sheets in windows of their own report separately.
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        IdleActivity.poke()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Replaces what getIntent() returns, so the extra this consumes is the
@@ -510,6 +522,8 @@ private fun BitChordApp(
     // dock or the motion directly.
     val reducePlayerMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val playerStyle by AppSettings.playerStyle.collectAsStateWithLifecycle()
+    val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
+    val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
     val activeDock = playerDock.takeIf { !reducePlayerMotion }
     playerSheetMotion.flingVelocity = with(LocalDensity.current) { PLAYER_PULL_FLING_VELOCITY.toPx() }
     // How the app takes the player down, whatever for: a back press, or a page
@@ -4003,6 +4017,9 @@ private fun BitChordApp(
                             }
                         }
                         .guardSheetFromContentTouches(nowPlayingSheetState)
+                        // The player is its own window; its touches never
+                        // reach the activity's onUserInteraction.
+                        .pokeIdleOnTouch()
                         // The sheet fills the window, so its height is the
                         // whole of its travel: hidden sits that far down.
                         .onSizeChanged {
@@ -4371,7 +4388,9 @@ private fun BitChordApp(
                 // bare strip at the foot, and the rows cut off above it.
                 contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
             ) {
-                songMenuBody(song, SongActionsPresentation.Sheet)
+                Box(Modifier.pokeIdleOnTouch()) {
+                    songMenuBody(song, SongActionsPresentation.Sheet)
+                }
             }
         }
         // Drawn over everything, tab bar and mini player included, and kept
@@ -5209,6 +5228,19 @@ private fun BitChordApp(
             )
         }
 
+        // Last, so its window goes up over the player's.
+        IdleScreenHost(
+            face = when (idleScreenMode) {
+                IdleScreenMode.OFF -> null
+                IdleScreenMode.APPLE_MUSIC -> IdleFace.APPLE_MUSIC
+                IdleScreenMode.WALKMAN -> IdleFace.WALKMAN
+            },
+            delaySeconds = idleScreenDelay,
+            song = playerSong,
+            isPlaying = player.isPlaying,
+            position = player.position,
+            durationMs = player.durationMs,
+        )
     }
 }
 
