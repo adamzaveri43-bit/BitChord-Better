@@ -263,6 +263,8 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import androidx.media3.common.Player
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.ui.player.NowPlayingScreen
+import com.music.bitchord.ui.player.IpodPlayer
+import com.music.bitchord.data.settings.PlayerStyle
 import com.music.bitchord.ui.player.PlayerSheetMotion
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
@@ -506,6 +508,7 @@ private fun BitChordApp(
     // takes part in the docking asks for [activeDock] / this, never for the
     // dock or the motion directly.
     val reducePlayerMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val playerStyle by AppSettings.playerStyle.collectAsStateWithLifecycle()
     val activeDock = playerDock.takeIf { !reducePlayerMotion }
     playerSheetMotion.flingVelocity = with(LocalDensity.current) { PLAYER_PULL_FLING_VELOCITY.toPx() }
     // How the app takes the player down, whatever for: a back press, or a page
@@ -2186,7 +2189,33 @@ private fun BitChordApp(
                         it.memberId == playback.startedBy
                     }?.displayName?.takeIf(String::isNotBlank)
             }
-        NowPlayingScreen(
+        if (playerStyle == PlayerStyle.IPOD) {
+            IpodPlayer(
+                song = displayedSong,
+                isPlaying = player.isPlaying,
+                position = player.position,
+                durationMs = player.durationMs,
+                queueIndex = player.queueIndex,
+                queueSize = player.queue.size,
+                onPlayPause = { togglePlayPause() },
+                onNext = { controller?.seekToNextMediaItem() },
+                onPrevious = { controller?.seekToPrevious() },
+                onSeek = { target ->
+                    controller?.let { player ->
+                        val duration = player.duration
+                        if (duration > 0) {
+                            player.seekTo(target.coerceIn(0L, (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)))
+                        }
+                    }
+                },
+                onMenu = dismissPlayer,
+                onOpenSongMenu = {
+                    menuFromPlayer = true
+                    songMenuOrigin = null
+                    songActions = song
+                },
+            )
+        } else NowPlayingScreen(
             song = displayedSong,
             playedBy = playedBy,
             accountName = account?.name,

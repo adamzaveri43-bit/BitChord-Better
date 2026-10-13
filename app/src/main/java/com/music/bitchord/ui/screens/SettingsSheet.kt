@@ -72,6 +72,8 @@ import androidx.compose.material.icons.rounded.MotionPhotosOff
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistPlay
+import com.music.bitchord.data.settings.PlayerStyle
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Storage
@@ -234,6 +236,7 @@ fun SettingsScreen(
     val exportDownloads by AppSettings.exportDownloads.collectAsStateWithLifecycle()
     val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
     val hideVolumeBar by AppSettings.hideVolumeBar.collectAsStateWithLifecycle()
+    val playerStyle by AppSettings.playerStyle.collectAsStateWithLifecycle()
     val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
     val swipeToPlayNext by AppSettings.swipeToPlayNext.collectAsStateWithLifecycle()
     val dontRepeatSuggestions by AppSettings.dontRepeatSuggestions.collectAsStateWithLifecycle()
@@ -1292,6 +1295,22 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setStopOnTaskRemoved(!stopOnTaskRemoved) },
+                )
+            }
+            val playerStyleTitle = stringResource(R.string.player_style)
+            row(playerStyleTitle, "player", "ipod", "click wheel", "classic") {
+                SettingsRow(
+                    icon = Icons.Rounded.PlayCircle,
+                    title = playerStyleTitle,
+                )
+                SegmentedControl(
+                    options = listOf(
+                        stringResource(R.string.player_style_modern),
+                        stringResource(R.string.player_style_ipod),
+                    ),
+                    selectedIndex = PlayerStyle.entries.indexOf(playerStyle),
+                    onSelect = { AppSettings.setPlayerStyle(PlayerStyle.entries[it]) },
+                    modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
             }
             val hideVolumeBarTitle = stringResource(R.string.hide_volume_bar)

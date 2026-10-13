@@ -334,6 +334,12 @@
     <string name="dont_repeat_songs">Don’t repeat songs in current session</string>
     <string name="stop_music_on_close">Stop music on close from recents</string>
     <string name="stop_music_on_close_subtitle">Stops playback when swiped away from recent apps</string>
+    <string name="player_style">Player style</string>
+    <string name="player_style_modern">Modern</string>
+    <string name="player_style_ipod">iPod</string>
+    <string name="ipod_now_playing">Now Playing</string>
+    <string name="ipod_menu">MENU</string>
+    <string name="ipod_track_of">%1$d of %2$d</string>
     <string name="hide_volume_bar">Hide volume bar</string>
     <string name="hide_volume_bar_subtitle">Removes the volume slider from the main player</string>
     <string name="hide_song_status">Hide Song Status</string>

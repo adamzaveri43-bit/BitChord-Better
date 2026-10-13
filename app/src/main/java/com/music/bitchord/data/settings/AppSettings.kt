@@ -114,6 +114,15 @@ enum class EqualizerMode {
     MANUAL,
 }
 
+/** How the full-screen player is drawn. */
+enum class PlayerStyle {
+    /** The artwork-led player. */
+    MODERN,
+
+    /** A click-wheel iPod: a small LCD over the wheel. */
+    IPOD,
+}
+
 /** Stable persisted ordering for each on-device music library. */
 enum class LocalMusicSort {
     TITLE_ASC,
@@ -367,6 +376,9 @@ object AppSettings {
 
     /** Hides the volume slider on the main player, leaving the rest of the layout to reflow. */
     val hideVolumeBar = MutableStateFlow(false)
+
+    /** Which face the full-screen player wears. */
+    val playerStyle = MutableStateFlow(PlayerStyle.MODERN)
 
     /** Hides the "Playing from" / "Played by" caption at the top of the main player. */
     val hideSongStatus = MutableStateFlow(false)
@@ -828,6 +840,9 @@ object AppSettings {
         stopOnTaskRemoved.value = prefs.getBoolean(KEY_STOP_ON_TASK_REMOVED, false)
         hideVolumeBar.value = prefs.getBoolean(KEY_HIDE_VOLUME_BAR, false)
         hideSongStatus.value = prefs.getBoolean(KEY_HIDE_SONG_STATUS, false)
+        playerStyle.value = runCatching {
+            PlayerStyle.valueOf(prefs.getString(KEY_PLAYER_STYLE, null) ?: PlayerStyle.MODERN.name)
+        }.getOrDefault(PlayerStyle.MODERN)
         swipeToPlayNext.value = prefs.getBoolean(KEY_SWIPE_TO_PLAY_NEXT, false)
         dontRepeatSuggestions.value = prefs.getBoolean(KEY_DONT_REPEAT_SUGGESTIONS, false)
         preferMusicOnly.value = prefs.getBoolean(KEY_PREFER_MUSIC_ONLY, false)
@@ -1188,6 +1203,11 @@ object AppSettings {
     fun setStopOnTaskRemoved(value: Boolean) {
         stopOnTaskRemoved.value = value
         prefs.edit().putBoolean(KEY_STOP_ON_TASK_REMOVED, value).apply()
+    }
+
+    fun setPlayerStyle(value: PlayerStyle) {
+        playerStyle.value = value
+        prefs.edit().putString(KEY_PLAYER_STYLE, value.name).apply()
     }
 
     fun setHideVolumeBar(value: Boolean) {
@@ -1953,6 +1973,7 @@ object AppSettings {
     private const val KEY_PERFORMANCE_REFRESH_RATE = "performance_refresh_rate"
     private const val KEY_STOP_ON_TASK_REMOVED = "stop_on_task_removed"
     private const val KEY_HIDE_VOLUME_BAR = "hide_volume_bar"
+    private const val KEY_PLAYER_STYLE = "player_style"
     private const val KEY_HIDE_SONG_STATUS = "hide_song_status"
     private const val KEY_SWIPE_TO_PLAY_NEXT = "swipe_to_play_next"
     private const val KEY_DONT_REPEAT_SUGGESTIONS = "dont_repeat_suggestions"
