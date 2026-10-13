@@ -225,6 +225,7 @@ fun IdleScreenHost(
                         onClose = {},
                         onOpenSongMenu = {},
                         modifier = Modifier.fullBleedDrift(),
+                        deck = true,
                     )
                 }
                 IdleFace.WALKMAN -> {

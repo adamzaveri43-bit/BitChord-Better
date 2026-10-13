@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -118,6 +121,12 @@ fun Tp7Player(
     onClose: () -> Unit,
     onOpenSongMenu: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Fill the screen, with the height the device leaves over made into a deck
+     * carrying a clock — the idle screen's way. Off, the device is shown on its
+     * own at its true proportions, centred on black: the player's way.
+     */
+    deck: Boolean = false,
 ) {
     val view = LocalView.current
     val density = LocalDensity.current
@@ -218,18 +227,21 @@ fun Tp7Player(
     ) {
         BoxWithConstraints(
             Modifier
-                .fillMaxSize(),
+                .fillMaxSize()
+                // As a player it sits clear of the status and navigation bars;
+                // as an idle face it runs under them, which are hidden anyway.
+                .then(if (deck) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)),
             contentAlignment = Alignment.Center,
         ) {
             // The body is the screen: nothing sticks out of it, so it's drawn
             // to the width and runs the full height.
-            val u: Dp = maxWidth / GRID_W
+            val u: Dp = if (deck) maxWidth / GRID_W else minOf(maxWidth / GRID_W, maxHeight / GRID_H)
             // A phone is far taller than the device. Rather than stretch the
             // device to meet it, the device keeps its own proportions at the
             // foot of the screen and the height left over becomes a deck above
             // it — more of the same aluminium, carrying a large OLED of the
             // same kind as the small one. Nothing is drawn out of shape.
-            val extra = (maxHeight / u - GRID_H).coerceAtLeast(0f)
+            val extra = if (deck) (maxHeight / u - GRID_H).coerceAtLeast(0f) else 0f
             val hs = extra
             val ds = extra
             val keyGrow = 0f
