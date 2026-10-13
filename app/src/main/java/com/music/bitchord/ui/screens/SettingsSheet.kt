@@ -7,7 +7,16 @@ import android.media.audiofx.AudioEffect
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -2521,7 +2530,17 @@ internal fun DestructiveRow(
     }
 }
 
-/** Sliding pill selector, for the handful of settings with two or three states. */
+/**
+ * Sliding thumb selector, for the handful of choices with two or three states —
+ * drawn after iOS's segmented control, as Apple Music's search scope uses it.
+ *
+ * A short, translucent track with a single thumb that slides between segments
+ * rather than one pill fading out while another fades in: the movement is what
+ * tells you the two states are positions on one control. The thumb is a raised
+ * grey in the dark and white with a soft shadow in the light, never the accent
+ * colour — a scope picker is chrome, not a call to action. Hairline dividers
+ * sit between unselected neighbours and fade wherever the thumb is.
+ */
 @Composable
 internal fun SegmentedControl(
     options: List<String>,
@@ -2531,59 +2550,87 @@ internal fun SegmentedControl(
     enabled: Boolean = true,
 ) {
     val haptics = LocalHapticFeedback.current
-    Row(
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val track = if (dark) Color(0xFF767680).copy(alpha = 0.24f) else Color(0xFF767680).copy(alpha = 0.12f)
+    val thumb = if (dark) Color(0xFF636366) else Color.White
+    val divider = onSurface.copy(alpha = if (dark) 0.22f else 0.14f)
+    val count = options.size.coerceAtLeast(1)
+    // Fractional so the dividers can tell how near the thumb is mid-slide.
+    val position by animateFloatAsState(
+        targetValue = selectedIndex.coerceIn(0, count - 1).toFloat(),
+        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
+        label = "segmentThumb",
+    )
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.outline)
-            // Enough of a margin for the track to read as a track. At 2dp the
-            // selected pill sat all but flush against the container's own edge,
-            // so the two rounded rectangles merged into one shape and the
-            // control stopped looking like something with a position in it.
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+            .clip(RoundedCornerShape(9.dp))
+            .background(track)
+            .padding(2.dp),
     ) {
-        options.forEachIndexed { index, label ->
-            val chosen = index == selectedIndex
-            val pill by animateColorAsState(
-                targetValue = if (chosen) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    Color.Transparent
-                },
-                animationSpec = tween(160),
-                label = "segmentPill",
-            )
-            val labelColor by animateColorAsState(
-                targetValue = if (chosen) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                animationSpec = tween(160),
-                label = "segmentLabel",
-            )
+        val segment = maxWidth / count
+        for (index in 1 until count) {
+            // Gone once the thumb covers either neighbour.
+            val gap = (kotlin.math.abs(position - (index - 0.5f)) - 0.5f).coerceIn(0f, 1f)
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(pill)
-                    .clickable(enabled = enabled) {
-                        if (!chosen) {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onSelect(index)
-                        }
-                    }
-                    .padding(vertical = 9.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = labelColor,
-                    maxLines = 1,
+                Modifier
+                    .offset(x = segment * index - 0.5.dp, y = SEGMENT_HEIGHT / 4)
+                    .width(1.dp)
+                    .height(SEGMENT_HEIGHT / 2)
+                    .graphicsLayer { alpha = gap }
+                    .background(divider),
+            )
+        }
+        Box(
+            Modifier
+                .offset(x = segment * position)
+                .width(segment)
+                .height(SEGMENT_HEIGHT)
+                .shadow(
+                    elevation = if (dark) 0.dp else 3.dp,
+                    shape = RoundedCornerShape(7.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.12f),
+                    spotColor = Color.Black.copy(alpha = 0.12f),
                 )
+                .clip(RoundedCornerShape(7.dp))
+                .background(thumb),
+        )
+        Row(Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, label ->
+                val chosen = index == selectedIndex
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(SEGMENT_HEIGHT)
+                        .clip(RoundedCornerShape(7.dp))
+                        .clickable(
+                            enabled = enabled,
+                            interactionSource = null,
+                            indication = null,
+                        ) {
+                            if (!chosen) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onSelect(index)
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = 13.sp,
+                            letterSpacing = (-0.08).sp,
+                        ),
+                        fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Medium,
+                        color = onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                    )
+                }
             }
         }
     }
 }
+
+private val SEGMENT_HEIGHT = 30.dp
