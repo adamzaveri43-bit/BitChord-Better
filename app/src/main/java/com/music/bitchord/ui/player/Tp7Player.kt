@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
@@ -81,8 +82,8 @@ import kotlin.math.hypot
  *
  * - The disc spins while the music plays. Drag it round to scrub, as the
  *   real one does; tap its hub to play or pause.
- * - ● likes the track, ▶ plays and pauses (it stays down while playing),
- *   ■ stops — pauses and goes back to the start.
+ * - ● likes the track, ▶ plays and pauses (its arrow lights orange while
+ *   playing), ■ stops — pauses and goes back to the start.
  * - ▲▲ and ▼R on the left edge, printed where the lever was, do the lever's
  *   job: a tap skips forward or back; held, they wind through the song with
  *   the disc spinning fast.
@@ -246,11 +247,6 @@ fun Tp7Player(
                 // ---- The deck's display ----
                 if (extra >= DECK_MIN) {
                     DeckDisplay(
-                        title = song.title,
-                        artist = song.artist,
-                        album = song.albumName,
-                        positionMs = shownMs,
-                        durationMs = durationMs,
                         units = ::units,
                         modifier = Modifier.at(DECK_MARGIN, DECK_MARGIN, BODY_W - DECK_MARGIN * 2, extra - DECK_MARGIN),
                     )
@@ -461,12 +457,12 @@ fun Tp7Player(
                 Canvas(Modifier.at(360f, 405f + ds, 110f, 110f)) { drawVolumePill() }
                 VolumeButton(
                     plus = true,
-                    modifier = Modifier.at(415f, 416f + ds, 40f, 40f),
+                    modifier = Modifier.at(415f + PM_OFFSET - 20f, 460f - PM_OFFSET - 20f + ds, 40f, 40f),
                     onStep = { setVolume(volumeLevel + VOLUME_STEP) },
                 )
                 VolumeButton(
                     plus = false,
-                    modifier = Modifier.at(370f, 458f + ds, 40f, 40f),
+                    modifier = Modifier.at(415f - PM_OFFSET - 20f, 460f + PM_OFFSET - 20f + ds, 40f, 40f),
                     onStep = { setVolume(volumeLevel - VOLUME_STEP) },
                 )
 
@@ -485,7 +481,7 @@ fun Tp7Player(
                 }
                 Key(
                     modifier = Modifier.at(117f, keyTop, 113f, keyH),
-                    latched = isPlaying,
+                    latched = false,
                     onTap = onPlayPause,
                 ) {
                     val s = size.minDimension * 0.13f
@@ -497,7 +493,9 @@ fun Tp7Player(
                             lineTo(c.x - s * 0.45f, c.y + s * 0.55f)
                             close()
                         },
-                        Color(0xFF2B2D31),
+                        // Lit while playing, like a key's lamp, rather than held down:
+                        // a sunk key read as a glitch on glass.
+                        if (isPlaying) Color(0xFFF26B21) else Color(0xFF2B2D31),
                     )
                 }
                 Key(
@@ -588,20 +586,34 @@ private fun SkipMark(
 }
 
 /**
- * The large OLED on the deck above the device: the track in the small
- * display's own monospace, a big counter, and a hairline of progress.
- * White on black, so on the idle screen it costs next to nothing to light.
+ * The large OLED on the deck above the device: a clock. The device's own small
+ * display already has the track, so this one has what it doesn't — the time
+ * and the date, in the same monospace. White on black, so on the idle screen
+ * it costs next to nothing to light.
  */
 @Composable
 private fun DeckDisplay(
-    title: String,
-    artist: String,
-    album: String?,
-    positionMs: Long,
-    durationMs: Long,
     units: (Float) -> androidx.compose.ui.unit.TextUnit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            // Wakes on the minute rather than polling.
+            delay(60_000L - System.currentTimeMillis() % 60_000L)
+            now = System.currentTimeMillis()
+        }
+    }
+    val locale = java.util.Locale.getDefault()
+    val time = remember(now) {
+        val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
+        java.text.SimpleDateFormat(pattern, locale).format(java.util.Date(now))
+    }
+    val date = remember(now) {
+        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM")
+        java.text.SimpleDateFormat(pattern, locale).format(java.util.Date(now)).uppercase(locale)
+    }
     Box(
         modifier
             .clip(RoundedCornerShape(4))
@@ -609,76 +621,26 @@ private fun DeckDisplay(
             .padding(1.5.dp)
             .clip(RoundedCornerShape(4))
             .background(Color.Black),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = title.uppercase(),
+                text = time,
                 color = Color.White,
-                fontSize = units(40f),
-                lineHeight = units(44f),
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = artist,
-                color = Color.White.copy(alpha = 0.75f),
-                fontSize = units(22f),
+                fontSize = units(120f),
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .basicMarquee(iterations = Int.MAX_VALUE),
+                style = TightText,
             )
-            album?.takeIf { it.isNotBlank() && it != title }?.let {
-                Text(
-                    text = it,
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontSize = units(19f),
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .basicMarquee(iterations = Int.MAX_VALUE),
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = formatOledTime(positionMs),
-                    color = Color.White,
-                    fontSize = units(52f),
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    style = TightText,
-                )
-                Spacer(Modifier.weight(1f))
-                if (durationMs > 0) {
-                    Text(
-                        text = "-" + formatOledTime(durationMs - positionMs),
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = units(19f),
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-            Canvas(
-                Modifier
-                    .fillMaxWidth()
-                    .height(3.dp),
-            ) {
-                drawRect(Color.White.copy(alpha = 0.22f))
-                drawRect(Color.White, size = Size(size.width * fraction, size.height))
-            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = date,
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = units(20f),
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = units(1f),
+                maxLines = 1,
+            )
         }
     }
 }
@@ -1038,6 +1000,13 @@ private fun formatOledTime(ms: Long): String {
 // The photo's grid: body 470 × 680, with the lever, antenna and knob around it.
 /** Below this much spare height, the deck stays bare aluminium. */
 private const val DECK_MIN = 150f
+/**
+ * How far + and − sit from the middle of their slot along each axis. The slot
+ * is 104.5 long and 44 thick, so each rounded end is centred 30.25 out along
+ * the 45° diagonal — 21.4 on each axis — and the 40-wide buttons sit in those
+ * ends with an even 2-unit rim all round.
+ */
+private const val PM_OFFSET = 21.4f
 private const val DECK_MARGIN = 22f
 private const val OX = 0f
 private const val OY = 0f
