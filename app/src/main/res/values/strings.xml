@@ -370,6 +370,7 @@
     <string name="idle_screen_off">Off</string>
     <string name="idle_screen_apple_music">Apple Music</string>
     <string name="idle_screen_delay">Show after</string>
+    <string name="idle_screen_brightness">Idle screen brightness</string>
     <string name="idle_screen_seconds">%1$d s</string>
     <string name="idle_screen_minute">1 min</string>
     <string name="ipod_now_playing">Now Playing</string>

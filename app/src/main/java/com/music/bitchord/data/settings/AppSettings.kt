@@ -405,6 +405,9 @@ object AppSettings {
     /** Which always-on face takes over while music plays and nobody touches the phone. */
     val idleScreenMode = MutableStateFlow(IdleScreenMode.OFF)
 
+    /** How bright the idle screen's face is, in percent of full. */
+    val idleScreenBrightness = MutableStateFlow(DEFAULT_IDLE_BRIGHTNESS)
+
     /** How long without a touch before [idleScreenMode]'s face comes up. */
     val idleScreenDelaySeconds = MutableStateFlow(DEFAULT_IDLE_SCREEN_DELAY)
 
@@ -877,6 +880,8 @@ object AppSettings {
         idleScreenMode.value = runCatching {
             IdleScreenMode.valueOf(prefs.getString(KEY_IDLE_SCREEN_MODE, null) ?: IdleScreenMode.OFF.name)
         }.getOrDefault(IdleScreenMode.OFF)
+        idleScreenBrightness.value = prefs.getInt(KEY_IDLE_SCREEN_BRIGHTNESS, DEFAULT_IDLE_BRIGHTNESS)
+            .coerceIn(MIN_IDLE_BRIGHTNESS, MAX_IDLE_BRIGHTNESS)
         idleScreenDelaySeconds.value = prefs.getInt(KEY_IDLE_SCREEN_DELAY, DEFAULT_IDLE_SCREEN_DELAY)
             .takeIf { it in IDLE_SCREEN_DELAYS } ?: DEFAULT_IDLE_SCREEN_DELAY
         appInterface.value = runCatching {
@@ -1250,6 +1255,12 @@ object AppSettings {
     fun setIdleScreenMode(value: IdleScreenMode) {
         idleScreenMode.value = value
         prefs.edit().putString(KEY_IDLE_SCREEN_MODE, value.name).apply()
+    }
+
+    fun setIdleScreenBrightness(value: Int) {
+        val clamped = value.coerceIn(MIN_IDLE_BRIGHTNESS, MAX_IDLE_BRIGHTNESS)
+        idleScreenBrightness.value = clamped
+        prefs.edit().putInt(KEY_IDLE_SCREEN_BRIGHTNESS, clamped).apply()
     }
 
     fun setIdleScreenDelaySeconds(value: Int) {
@@ -2034,6 +2045,11 @@ object AppSettings {
     private const val KEY_APP_INTERFACE = "app_interface"
     private const val KEY_IDLE_SCREEN_MODE = "idle_screen_mode"
     private const val KEY_IDLE_SCREEN_DELAY = "idle_screen_delay"
+    private const val KEY_IDLE_SCREEN_BRIGHTNESS = "idle_screen_brightness"
+    /** The idle screen's brightness until it's set: dim, as an always-on display is. */
+    const val DEFAULT_IDLE_BRIGHTNESS = 10
+    const val MIN_IDLE_BRIGHTNESS = 1
+    const val MAX_IDLE_BRIGHTNESS = 60
 
     /** The choices offered for [idleScreenDelaySeconds]. */
     val IDLE_SCREEN_DELAYS = listOf(15, 30, 60)

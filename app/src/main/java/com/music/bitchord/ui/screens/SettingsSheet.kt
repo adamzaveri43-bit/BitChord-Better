@@ -244,6 +244,7 @@ fun SettingsScreen(
     val appInterface by AppSettings.appInterface.collectAsStateWithLifecycle()
     val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
     val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
+    val idleScreenBrightness by AppSettings.idleScreenBrightness.collectAsStateWithLifecycle()
     val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
     val swipeToPlayNext by AppSettings.swipeToPlayNext.collectAsStateWithLifecycle()
     val dontRepeatSuggestions by AppSettings.dontRepeatSuggestions.collectAsStateWithLifecycle()
@@ -1373,7 +1374,16 @@ fun SettingsScreen(
                         },
                         selectedIndex = AppSettings.IDLE_SCREEN_DELAYS.indexOf(idleScreenDelay),
                         onSelect = { AppSettings.setIdleScreenDelaySeconds(AppSettings.IDLE_SCREEN_DELAYS[it]) },
-                        modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
+                        modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 4.dp),
+                    )
+                    SliderRow(
+                        icon = Icons.Rounded.Brightness4,
+                        title = stringResource(R.string.idle_screen_brightness),
+                        value = "$idleScreenBrightness%",
+                        sliderValue = idleScreenBrightness.toFloat(),
+                        onSliderValue = { AppSettings.setIdleScreenBrightness(it.roundToInt()) },
+                        valueRange = AppSettings.MIN_IDLE_BRIGHTNESS.toFloat()..AppSettings.MAX_IDLE_BRIGHTNESS.toFloat(),
+                        steps = AppSettings.MAX_IDLE_BRIGHTNESS - AppSettings.MIN_IDLE_BRIGHTNESS - 1,
                     )
                 }
             }

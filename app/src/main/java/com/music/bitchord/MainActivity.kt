@@ -537,6 +537,7 @@ private fun BitChordApp(
     }
     val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
     val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
+    val idleScreenBrightness by AppSettings.idleScreenBrightness.collectAsStateWithLifecycle()
     val activeDock = playerDock.takeIf { !reducePlayerMotion }
     playerSheetMotion.flingVelocity = with(LocalDensity.current) { PLAYER_PULL_FLING_VELOCITY.toPx() }
     // How the app takes the player down, whatever for: a back press, or a page
@@ -5369,6 +5370,7 @@ private fun BitChordApp(
             position = player.position,
             durationMs = player.durationMs,
             queueIndex = player.queueIndex,
+            brightnessPercent = idleScreenBrightness,
         )
     }
 }

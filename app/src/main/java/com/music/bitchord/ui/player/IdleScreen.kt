@@ -56,6 +56,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil3.compose.AsyncImage
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.playback.PlaybackPosition
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -120,6 +121,8 @@ fun IdleScreenHost(
     position: PlaybackPosition,
     durationMs: Long,
     queueIndex: Int = 0,
+    /** How bright the face is, in percent of full: the screen's own level while it's up. */
+    brightnessPercent: Int = AppSettings.DEFAULT_IDLE_BRIGHTNESS,
 ) {
     var shown by remember { mutableStateOf(false) }
     val last by IdleActivity.lastInteraction.collectAsState()
@@ -162,13 +165,13 @@ fun IdleScreenHost(
         ),
     ) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        DisposableEffect(window) {
+        DisposableEffect(window, brightnessPercent) {
             window?.let { w ->
                 w.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
                 w.setDimAmount(0f)
                 w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 w.attributes = w.attributes.apply {
-                    screenBrightness = IDLE_BRIGHTNESS
+                    screenBrightness = (brightnessPercent / 100f).coerceIn(0.01f, 1f)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         layoutInDisplayCutoutMode =
                             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -221,13 +224,7 @@ fun IdleScreenHost(
                         onToggleAutoplay = {},
                         onClose = {},
                         onOpenSongMenu = {},
-                        modifier = Modifier.burnInDrift(),
-                    )
-                    // Silver is bright; take more of it down than the Walkman.
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.5f)),
+                        modifier = Modifier.fullBleedDrift(),
                     )
                 }
                 IdleFace.WALKMAN -> {
@@ -236,19 +233,38 @@ fun IdleScreenHost(
                         isPlaying = isPlaying,
                         position = position,
                         durationMs = durationMs,
-                        modifier = Modifier.burnInDrift(),
-                    )
-                    // Dimmer still than the window's brightness alone.
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.35f)),
+                        modifier = Modifier.fullBleedDrift(),
                     )
                 }
+            }
+            // Below what the screen can dim to on its own, a veil takes the face
+            // further down; at the top of the range there's none.
+            val veil = idleVeil(brightnessPercent)
+            if (veil > 0f) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = veil)),
+                )
             }
         }
     }
 }
+
+/**
+ * [burnInDrift] for a face that covers the whole screen: drawn a few percent
+ * larger, so the nudge never opens a gap at an edge.
+ */
+@Composable
+private fun Modifier.fullBleedDrift(): Modifier =
+    burnInDrift().graphicsLayer {
+        scaleX = FULL_BLEED_SCALE
+        scaleY = FULL_BLEED_SCALE
+    }
+
+/** How much black goes over the face at [percent] brightness: none from 40% up. */
+private fun idleVeil(percent: Int): Float =
+    ((40 - percent) / 40f).coerceIn(0f, 1f) * 0.45f
 
 /** Nudges the content a few dp each minute, against burn-in. */
 @Composable
@@ -384,6 +400,7 @@ private fun AppleMusicIdleFace(
     }
 }
 
-private const val IDLE_BRIGHTNESS = 0.06f
+/** Enough over-scan that a [DRIFT_DP] nudge can't uncover an edge. */
+private const val FULL_BLEED_SCALE = 1.04f
 private const val PAUSED_GRACE_MS = 60_000L
 private const val DRIFT_DP = 6
