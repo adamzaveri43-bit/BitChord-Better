@@ -223,14 +223,15 @@ fun Tp7Player(
             // The body is the screen: nothing sticks out of it, so it's drawn
             // to the width and runs the full height.
             val u: Dp = maxWidth / GRID_W
-            // A phone is taller than the device. The height the width leaves
-            // over goes into the room above the header, the room above the
-            // disc, and the keys and fader, which take it as length. The disc
-            // keeps its shape and the keys stay key-shaped.
+            // A phone is far taller than the device. Rather than stretch the
+            // device to meet it, the device keeps its own proportions at the
+            // foot of the screen and the height left over becomes a deck above
+            // it — more of the same aluminium, carrying a large OLED of the
+            // same kind as the small one. Nothing is drawn out of shape.
             val extra = (maxHeight / u - GRID_H).coerceAtLeast(0f)
-            val hs = extra * 0.25f
-            val ds = extra * 0.65f
-            val keyGrow = extra - ds
+            val hs = extra
+            val ds = extra
+            val keyGrow = 0f
             val bodyH = BODY_H + extra
             val keyH = KEY_H + keyGrow
             val faderTravel = FADER_TRAVEL + keyGrow
@@ -241,6 +242,19 @@ fun Tp7Player(
             Box(Modifier.size(u * GRID_W, u * (GRID_H + extra))) {
                 // ---- The body ----
                 Canvas(Modifier.at(0f, 0f, BODY_W, bodyH)) { drawBody() }
+
+                // ---- The deck's display ----
+                if (extra >= DECK_MIN) {
+                    DeckDisplay(
+                        title = song.title,
+                        artist = song.artist,
+                        album = song.albumName,
+                        positionMs = shownMs,
+                        durationMs = durationMs,
+                        units = ::units,
+                        modifier = Modifier.at(DECK_MARGIN, DECK_MARGIN, BODY_W - DECK_MARGIN * 2, extra - DECK_MARGIN),
+                    )
+                }
 
                 // ---- LEDs ----
                 Canvas(Modifier.at(150f, 30f + hs, 20f, 20f)) {
@@ -570,6 +584,102 @@ private fun SkipMark(
             onHoldRepeat = onHoldRepeat,
             onHoldEnd = onHoldEnd,
         )
+    }
+}
+
+/**
+ * The large OLED on the deck above the device: the track in the small
+ * display's own monospace, a big counter, and a hairline of progress.
+ * White on black, so on the idle screen it costs next to nothing to light.
+ */
+@Composable
+private fun DeckDisplay(
+    title: String,
+    artist: String,
+    album: String?,
+    positionMs: Long,
+    durationMs: Long,
+    units: (Float) -> androidx.compose.ui.unit.TextUnit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(4))
+            .background(Color(0xFF8D9094))
+            .padding(1.5.dp)
+            .clip(RoundedCornerShape(4))
+            .background(Color.Black),
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Text(
+                text = title.uppercase(),
+                color = Color.White,
+                fontSize = units(40f),
+                lineHeight = units(44f),
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = artist,
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = units(22f),
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .basicMarquee(iterations = Int.MAX_VALUE),
+            )
+            album?.takeIf { it.isNotBlank() && it != title }?.let {
+                Text(
+                    text = it,
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = units(19f),
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .basicMarquee(iterations = Int.MAX_VALUE),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = formatOledTime(positionMs),
+                    color = Color.White,
+                    fontSize = units(52f),
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    style = TightText,
+                )
+                Spacer(Modifier.weight(1f))
+                if (durationMs > 0) {
+                    Text(
+                        text = "-" + formatOledTime(durationMs - positionMs),
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = units(19f),
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(3.dp),
+            ) {
+                drawRect(Color.White.copy(alpha = 0.22f))
+                drawRect(Color.White, size = Size(size.width * fraction, size.height))
+            }
+        }
     }
 }
 
@@ -926,6 +1036,9 @@ private fun formatOledTime(ms: Long): String {
 }
 
 // The photo's grid: body 470 × 680, with the lever, antenna and knob around it.
+/** Below this much spare height, the deck stays bare aluminium. */
+private const val DECK_MIN = 150f
+private const val DECK_MARGIN = 22f
 private const val OX = 0f
 private const val OY = 0f
 private const val GRID_W = 470f
