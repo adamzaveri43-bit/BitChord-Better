@@ -265,6 +265,7 @@ import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.ui.player.NowPlayingScreen
 import com.music.bitchord.ui.player.IpodPlayer
 import com.music.bitchord.ui.player.WalkmanPlayer
+import com.music.bitchord.ui.player.Tp7Player
 import com.music.bitchord.ui.player.IdleActivity
 import com.music.bitchord.ui.player.IdleFace
 import com.music.bitchord.ui.player.IdleScreenHost
@@ -2204,7 +2205,57 @@ private fun BitChordApp(
                         it.memberId == playback.startedBy
                     }?.displayName?.takeIf(String::isNotBlank)
             }
-        if (playerStyle == PlayerStyle.WALKMAN) {
+        if (playerStyle == PlayerStyle.TP7) {
+            Tp7Player(
+                song = displayedSong,
+                isPlaying = player.isPlaying,
+                position = player.position,
+                durationMs = player.durationMs,
+                queueIndex = player.queueIndex,
+                liked = likeStatuses[song.videoId] == LikeStatus.LIKE,
+                shuffleEnabled = shuffleEnabled,
+                repeatMode = player.repeatMode,
+                autoplayEnabled = autoplayEnabled,
+                onPlayPause = { togglePlayPause() },
+                // Stop as the device means it: halt, and back to the top.
+                onStop = {
+                    controller?.let {
+                        it.pause()
+                        it.seekTo(0L)
+                    }
+                },
+                onNext = { controller?.seekToNextMediaItem() },
+                onPrevious = { controller?.seekToPrevious() },
+                onSeek = { target ->
+                    controller?.let { player ->
+                        val duration = player.duration
+                        if (duration > 0) {
+                            player.seekTo(target.coerceIn(0L, (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)))
+                        }
+                    }
+                },
+                onToggleLike = { viewModel.toggleLike(song.videoId) },
+                onToggleShuffle = { controller?.toggleShuffle() },
+                onCycleRepeat = {
+                    controller?.let {
+                        val next = when (it.repeatMode) {
+                            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                            else -> Player.REPEAT_MODE_OFF
+                        }
+                        AppSettings.setRepeatMode(next)
+                        it.repeatMode = next
+                    }
+                },
+                onToggleAutoplay = { controller?.toggleAutoplay() },
+                onClose = dismissPlayer,
+                onOpenSongMenu = {
+                    menuFromPlayer = true
+                    songMenuOrigin = null
+                    songActions = song
+                },
+            )
+        } else if (playerStyle == PlayerStyle.WALKMAN) {
             WalkmanPlayer(
                 song = displayedSong,
                 isPlaying = player.isPlaying,
@@ -5234,12 +5285,14 @@ private fun BitChordApp(
                 IdleScreenMode.OFF -> null
                 IdleScreenMode.APPLE_MUSIC -> IdleFace.APPLE_MUSIC
                 IdleScreenMode.WALKMAN -> IdleFace.WALKMAN
+                IdleScreenMode.TP7 -> IdleFace.TP7
             },
             delaySeconds = idleScreenDelay,
             song = playerSong,
             isPlaying = player.isPlaying,
             position = player.position,
             durationMs = player.durationMs,
+            queueIndex = player.queueIndex,
         )
     }
 }

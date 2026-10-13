@@ -124,6 +124,9 @@ enum class PlayerStyle {
 
     /** A portable cassette player: the tape, its reels, and mechanical keys. */
     WALKMAN,
+
+    /** An aluminium pocket recorder after the TP-7: spinning disc, OLED, three keys. */
+    TP7,
 }
 
 /** The always-on face shown while music plays and the phone sits idle. */
@@ -135,6 +138,9 @@ enum class IdleScreenMode {
 
     /** The cassette player, dimmed. */
     WALKMAN,
+
+    /** The TP-7-style recorder, dimmed. */
+    TP7,
 }
 
 /** Stable persisted ordering for each on-device music library. */

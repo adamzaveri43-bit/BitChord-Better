@@ -338,6 +338,7 @@
     <string name="player_style_modern">Modern</string>
     <string name="player_style_ipod">iPod</string>
     <string name="player_style_walkman">Walkman</string>
+    <string name="player_style_tp7">TP-7</string>
     <string name="idle_screen">Idle screen</string>
     <string name="idle_screen_subtitle">While music plays, a dim always-on face takes over once you stop touching the phone. Keeps the screen on while playing.</string>
     <string name="idle_screen_off">Off</string>

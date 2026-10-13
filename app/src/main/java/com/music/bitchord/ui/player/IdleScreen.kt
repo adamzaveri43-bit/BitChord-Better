@@ -67,7 +67,7 @@ import java.util.Locale
 import kotlin.random.Random
 
 /** Which face the idle screen wears, if any. */
-enum class IdleFace { APPLE_MUSIC, WALKMAN }
+enum class IdleFace { APPLE_MUSIC, WALKMAN, TP7 }
 
 /**
  * When someone last touched the app.
@@ -119,6 +119,7 @@ fun IdleScreenHost(
     isPlaying: Boolean,
     position: PlaybackPosition,
     durationMs: Long,
+    queueIndex: Int = 0,
 ) {
     var shown by remember { mutableStateOf(false) }
     val last by IdleActivity.lastInteraction.collectAsState()
@@ -198,6 +199,37 @@ fun IdleScreenHost(
         ) {
             when (face) {
                 IdleFace.APPLE_MUSIC -> AppleMusicIdleFace(song, position, durationMs)
+                IdleFace.TP7 -> {
+                    Tp7Player(
+                        song = song,
+                        isPlaying = isPlaying,
+                        position = position,
+                        durationMs = durationMs,
+                        queueIndex = queueIndex,
+                        liked = false,
+                        shuffleEnabled = false,
+                        repeatMode = 0,
+                        autoplayEnabled = false,
+                        onPlayPause = {},
+                        onStop = {},
+                        onNext = {},
+                        onPrevious = {},
+                        onSeek = {},
+                        onToggleLike = {},
+                        onToggleShuffle = {},
+                        onCycleRepeat = {},
+                        onToggleAutoplay = {},
+                        onClose = {},
+                        onOpenSongMenu = {},
+                        modifier = Modifier.burnInDrift(),
+                    )
+                    // Silver is bright; take more of it down than the Walkman.
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f)),
+                    )
+                }
                 IdleFace.WALKMAN -> {
                     WalkmanPlayer(
                         song = song,

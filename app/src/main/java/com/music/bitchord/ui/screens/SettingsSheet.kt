@@ -1302,7 +1302,7 @@ fun SettingsScreen(
                 )
             }
             val playerStyleTitle = stringResource(R.string.player_style)
-            row(playerStyleTitle, "player", "ipod", "click wheel", "classic", "walkman", "cassette", "tape") {
+            row(playerStyleTitle, "player", "ipod", "click wheel", "classic", "walkman", "cassette", "tape", "tp-7", "tp7", "teenage engineering") {
                 SettingsRow(
                     icon = Icons.Rounded.PlayCircle,
                     title = playerStyleTitle,
@@ -1312,6 +1312,7 @@ fun SettingsScreen(
                         stringResource(R.string.player_style_modern),
                         stringResource(R.string.player_style_ipod),
                         stringResource(R.string.player_style_walkman),
+                        stringResource(R.string.player_style_tp7),
                     ),
                     selectedIndex = PlayerStyle.entries.indexOf(playerStyle),
                     onSelect = { AppSettings.setPlayerStyle(PlayerStyle.entries[it]) },
@@ -1319,7 +1320,7 @@ fun SettingsScreen(
                 )
             }
             val idleScreenTitle = stringResource(R.string.idle_screen)
-            row(idleScreenTitle, "aod", "always on", "always-on display", "idle", "lock screen", "clock", "walkman") {
+            row(idleScreenTitle, "aod", "always on", "always-on display", "idle", "lock screen", "clock", "walkman", "tp-7") {
                 SettingsRow(
                     icon = Icons.Rounded.Bedtime,
                     title = idleScreenTitle,
@@ -1330,6 +1331,7 @@ fun SettingsScreen(
                         stringResource(R.string.idle_screen_off),
                         stringResource(R.string.idle_screen_apple_music),
                         stringResource(R.string.player_style_walkman),
+                        stringResource(R.string.player_style_tp7),
                     ),
                     selectedIndex = IdleScreenMode.entries.indexOf(idleScreenMode),
                     onSelect = { AppSettings.setIdleScreenMode(IdleScreenMode.entries[it]) },
