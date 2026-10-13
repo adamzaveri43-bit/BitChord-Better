@@ -5371,6 +5371,9 @@ private fun BitChordApp(
             durationMs = player.durationMs,
             queueIndex = player.queueIndex,
             brightnessPercent = idleScreenBrightness,
+            onPlayPause = { togglePlayPause() },
+            onNext = { controller?.seekToNextMediaItem() },
+            onPrevious = { controller?.seekToPrevious() },
         )
     }
 }

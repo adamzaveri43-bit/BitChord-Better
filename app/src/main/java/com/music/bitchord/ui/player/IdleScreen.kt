@@ -10,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -128,6 +129,10 @@ fun IdleScreenHost(
     queueIndex: Int = 0,
     /** How bright the face is, in percent of full: the screen's own level while it's up. */
     brightnessPercent: Int = AppSettings.DEFAULT_IDLE_BRIGHTNESS,
+    /** For faces that carry transport keys (the Walkman's side bar). */
+    onPlayPause: () -> Unit = {},
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {},
 ) {
     var shown by remember { mutableStateOf(false) }
     val last by IdleActivity.lastInteraction.collectAsState()
@@ -196,12 +201,23 @@ fun IdleScreenHost(
                 .fillMaxSize()
                 .background(Color.Black)
                 .graphicsLayer { alpha = fade.value }
-                // Any touch at all wakes the app, and none reaches the face.
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                        down.consume()
-                        wake()
+                .pointerInput(face) {
+                    if (face == IdleFace.WALKMAN) {
+                        // The Walkman's side keys work without waking: they
+                        // take their own taps, and anything they don't take —
+                        // a touch anywhere else — wakes the app as it lifts.
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            val up = waitForUpOrCancellation()
+                            if (up != null) wake()
+                        }
+                    } else {
+                        // Any touch at all wakes the app, and none reaches the face.
+                        awaitEachGesture {
+                            val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                            down.consume()
+                            wake()
+                        }
                     }
                 },
         ) {
@@ -240,6 +256,9 @@ fun IdleScreenHost(
                         position = position,
                         durationMs = durationMs,
                         modifier = Modifier.fullBleedDrift(),
+                        onPlayPause = onPlayPause,
+                        onNext = onNext,
+                        onPrevious = onPrevious,
                     )
                 }
             }
