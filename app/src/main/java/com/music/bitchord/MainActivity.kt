@@ -264,7 +264,6 @@ import androidx.media3.common.Player
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.ui.player.NowPlayingScreen
 import com.music.bitchord.ui.player.IpodPlayer
-import com.music.bitchord.ui.player.WalkmanPlayer
 import com.music.bitchord.ui.player.Tp7Player
 import com.music.bitchord.ui.player.IpodApp
 import com.music.bitchord.ui.player.IpodActions
@@ -2262,30 +2261,6 @@ private fun BitChordApp(
                 },
                 onToggleAutoplay = { controller?.toggleAutoplay() },
                 onClose = dismissPlayer,
-                onOpenSongMenu = {
-                    menuFromPlayer = true
-                    songMenuOrigin = null
-                    songActions = song
-                },
-            )
-        } else if (playerStyle == PlayerStyle.WALKMAN) {
-            WalkmanPlayer(
-                song = displayedSong,
-                isPlaying = player.isPlaying,
-                position = player.position,
-                durationMs = player.durationMs,
-                onPlayPause = { togglePlayPause() },
-                onNext = { controller?.seekToNextMediaItem() },
-                onPrevious = { controller?.seekToPrevious() },
-                onSeek = { target ->
-                    controller?.let { player ->
-                        val duration = player.duration
-                        if (duration > 0) {
-                            player.seekTo(target.coerceIn(0L, (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)))
-                        }
-                    }
-                },
-                onEject = dismissPlayer,
                 onOpenSongMenu = {
                     menuFromPlayer = true
                     songMenuOrigin = null

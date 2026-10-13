@@ -893,9 +893,12 @@ private const val WHEEL_WIDTH = 0.86f
 private const val WHEEL_HEIGHT = 0.92f
 private const val REFLECTION = 0.28f
 private const val CENTER_RATIO = 0.38f
-/** 24 clicks a turn, about where the real wheel's felt. */
-private const val DETENT = (2 * PI / 24).toFloat()
-private const val TURN_SLOP = 0.12f
+/**
+ * 36 clicks a turn. The real wheel's 24 asked for too long a thumb travel
+ * per row on a glass screen with no ridge to feel.
+ */
+private const val DETENT = (2 * PI / 36).toFloat()
+private const val TURN_SLOP = 0.06f
 private const val HOLD_MS = 550L
 private const val VOLUME_STEP = 1f / 32f
 private const val SCRUB_STEP_MS = 5_000L

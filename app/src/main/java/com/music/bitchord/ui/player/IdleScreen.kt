@@ -231,17 +231,11 @@ fun IdleScreenHost(
                     )
                 }
                 IdleFace.WALKMAN -> {
-                    WalkmanPlayer(
+                    WalkmanFace(
                         song = song,
                         isPlaying = isPlaying,
                         position = position,
                         durationMs = durationMs,
-                        onPlayPause = {},
-                        onNext = {},
-                        onPrevious = {},
-                        onSeek = {},
-                        onEject = {},
-                        onOpenSongMenu = {},
                         modifier = Modifier.burnInDrift(),
                     )
                     // Dimmer still than the window's brightness alone.

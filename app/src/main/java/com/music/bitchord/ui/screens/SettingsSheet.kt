@@ -1322,7 +1322,7 @@ fun SettingsScreen(
                 )
             }
             val playerStyleTitle = stringResource(R.string.player_style)
-            row(playerStyleTitle, "player", "ipod", "click wheel", "classic", "walkman", "cassette", "tape", "tp-7", "tp7", "teenage engineering") {
+            row(playerStyleTitle, "player", "ipod", "click wheel", "classic", "tp-7", "tp7", "teenage engineering") {
                 SettingsRow(
                     icon = Icons.Rounded.PlayCircle,
                     title = playerStyleTitle,
@@ -1331,7 +1331,6 @@ fun SettingsScreen(
                     options = listOf(
                         stringResource(R.string.player_style_modern),
                         stringResource(R.string.player_style_ipod),
-                        stringResource(R.string.player_style_walkman),
                         stringResource(R.string.player_style_tp7),
                     ),
                     selectedIndex = PlayerStyle.entries.indexOf(playerStyle),

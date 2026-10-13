@@ -3,6 +3,7 @@ package com.music.bitchord.ui.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -405,6 +406,10 @@ fun IpodApp(
                                 rows = rows,
                                 selected = selectedIndex,
                                 list = top.list,
+                                onTap = { i ->
+                                    selected.intValue = i
+                                    rows.getOrNull(i)?.onSelect?.invoke()
+                                },
                                 modifier = Modifier
                                     .weight(0.56f)
                                     .fillMaxHeight(),
@@ -440,6 +445,10 @@ fun IpodApp(
                             rows = rows,
                             selected = selectedIndex,
                             list = top.list,
+                            onTap = { i ->
+                                selected.intValue = i
+                                rows.getOrNull(i)?.onSelect?.invoke()
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -503,6 +512,7 @@ private fun MenuList(
     rows: List<IpodRow>,
     selected: Int,
     list: LazyListState,
+    onTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -521,13 +531,15 @@ private fun MenuList(
         Row(Modifier.fillMaxSize()) {
             LazyColumn(
                 state = list,
-                userScrollEnabled = false,
+                // The wheel isn't the only way through a long list: it can
+                // be flicked like any other, and a row tapped to open it.
+                userScrollEnabled = true,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
             ) {
                 itemsIndexed(rows) { index, row ->
-                    MenuRow(row, highlighted = index == selected)
+                    MenuRow(row, highlighted = index == selected, onTap = { onTap(index) })
                 }
             }
             if (scrolls) {
@@ -558,12 +570,13 @@ private fun MenuList(
 }
 
 @Composable
-private fun MenuRow(row: IpodRow, highlighted: Boolean) {
+private fun MenuRow(row: IpodRow, highlighted: Boolean, onTap: () -> Unit) {
     val textColor = if (highlighted) Color.White else LcdText
     Row(
         Modifier
             .fillMaxWidth()
             .height(RowHeight)
+            .clickable(onClick = onTap)
             .then(
                 if (highlighted) {
                     Modifier.background(Brush.verticalGradient(listOf(HighlightTop, HighlightBottom)))

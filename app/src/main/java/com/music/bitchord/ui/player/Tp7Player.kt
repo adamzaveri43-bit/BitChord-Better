@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -210,21 +211,29 @@ fun Tp7Player(
     Box(
         modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFFEDEDEE), Color(0xFFDADBDD)))),
+            .background(Color.Black),
     ) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 12.dp, vertical = 16.dp),
+                .padding(horizontal = 6.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center,
         ) {
             val u: Dp = minOf(maxWidth / GRID_W, maxHeight / GRID_H)
+            // A phone is taller than the device. Rather than leave the spare
+            // height empty, the lower half — keys, fader and the body round
+            // them — grows into it, up to a point; the disc and everything
+            // above keep their proportions.
+            val extra = (maxHeight / u - GRID_H).coerceIn(0f, MAX_EXTRA)
+            val bodyH = BODY_H + extra
+            val keyH = KEY_H + extra
+            val faderTravel = FADER_TRAVEL + extra
             fun Modifier.at(x: Float, y: Float, w: Float, h: Float): Modifier =
                 this.offset(u * (x + OX), u * (y + OY)).size(u * w, u * h)
             fun units(n: Float) = with(density) { (u * n).toSp() }
 
-            Box(Modifier.size(u * GRID_W, u * GRID_H)) {
+            Box(Modifier.size(u * GRID_W, u * (GRID_H + extra))) {
                 // ---- Antenna, side tab, knob neck: behind the body ----
                 Box(
                     Modifier
@@ -234,13 +243,13 @@ fun Tp7Player(
                 )
                 Box(
                     Modifier
-                        .at(-10f, 540f, 14f, 100f)
+                        .at(-10f, KEY_TOP + 24f, 14f, 100f + extra * 0.5f)
                         .clip(RoundedCornerShape(u * 4))
                         .background(Brush.horizontalGradient(listOf(Color(0xFFB4B7BB), Color(0xFFD6D7D9)))),
                 )
 
                 // ---- The body ----
-                Canvas(Modifier.at(0f, 0f, BODY_W, BODY_H)) { drawBody() }
+                Canvas(Modifier.at(0f, 0f, BODY_W, bodyH)) { drawBody() }
 
                 // ---- LEDs ----
                 Canvas(Modifier.at(150f, 30f, 20f, 20f)) {
@@ -267,6 +276,7 @@ fun Tp7Player(
                     time = formatOledTime(shownMs),
                     track = queueIndex + 1,
                     units = ::units,
+                    unit = u,
                     modifier = Modifier
                         .at(348f, 18f, 108f, 60f),
                 )
@@ -362,14 +372,14 @@ fun Tp7Player(
 
                 // ---- Lever ----
                 var leverTilt by remember { mutableIntStateOf(0) }
-                Canvas(Modifier.at(-42f, 90f, 70f, 370f)) {
+                Canvas(Modifier.at(-OX, 90f, 62f, 370f)) {
                     drawLever(tilt = leverTilt, unit = u.toPx())
                 }
                 Text("▲▲", color = Color(0xFF6C6F74), fontSize = units(13f), modifier = Modifier.at(10f, 125f, 30f, 20f))
                 Text("▼\nR", color = Color(0xFF6C6F74), fontSize = units(13f), lineHeight = units(15f), modifier = Modifier.at(13f, 395f, 30f, 40f))
                 // Upper half pushes it forward, lower half back.
                 PressArea(
-                    modifier = Modifier.at(-42f, 90f, 70f, 185f),
+                    modifier = Modifier.at(-OX, 90f, 62f, 185f),
                     onPressChange = { leverTilt = if (it) -1 else 0 },
                     onTap = onNext,
                     onHoldStart = { cueDirection = 1 },
@@ -380,7 +390,7 @@ fun Tp7Player(
                     },
                 )
                 PressArea(
-                    modifier = Modifier.at(-42f, 275f, 70f, 185f),
+                    modifier = Modifier.at(-OX, 275f, 62f, 185f),
                     onPressChange = { leverTilt = if (it) 1 else 0 },
                     onTap = onPrevious,
                     onHoldStart = { cueDirection = -1 },
@@ -395,16 +405,16 @@ fun Tp7Player(
                 var mDown by remember { mutableStateOf(false) }
                 Box(
                     Modifier
-                        .at(444f, 128f, 20f, 20f)
+                        .at(442f, 131f, 19f, 19f)
                         .graphicsLayer { scaleX = if (mDown) 0.9f else 1f; scaleY = scaleX }
                         .clip(RoundedCornerShape(u * 2))
                         .background(Color(0xFFF26B21)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("M", color = Color.White, fontSize = units(13f), fontWeight = FontWeight.Medium)
+                    Text("M", color = Color.White, fontSize = units(13f), fontWeight = FontWeight.Medium, style = TightText)
                 }
                 PressArea(
-                    modifier = Modifier.at(430f, 114f, 48f, 48f),
+                    modifier = Modifier.at(424f, 114f, 38f, 54f),
                     onPressChange = { mDown = it },
                     onTap = onOpenSongMenu,
                 )
@@ -418,14 +428,11 @@ fun Tp7Player(
                 val sideActions = listOf(onToggleShuffle, onCycleRepeat, onToggleAutoplay)
                 sides.forEachIndexed { i, (top, height, on) ->
                     var down by remember { mutableStateOf(false) }
-                    Canvas(Modifier.at(462f, top, 16f, height)) {
-                        drawSideButton(pressed = down)
-                    }
-                    Canvas(Modifier.at(452f, top + height / 2 - 4f, 8f, 8f)) {
-                        drawCircle(if (on) Color(0xFFFF6A1A) else Color(0xFFB3B5B9), size.minDimension / 2)
+                    Canvas(Modifier.at(466f, top, 12f, height)) {
+                        drawSideButton(pressed = down, on = on)
                     }
                     PressArea(
-                        modifier = Modifier.at(436f, top - 4f, 50f, height + 8f),
+                        modifier = Modifier.at(462f, top - 4f, 30f, height + 8f),
                         onPressChange = { down = it },
                         onTap = sideActions[i],
                     )
@@ -461,10 +468,11 @@ fun Tp7Player(
                 )
 
                 // ---- Keys ----
-                val keyTop = 516f
-                val keyH = 164f
+                val keyTop = KEY_TOP
                 Key(
                     modifier = Modifier.at(0f, keyTop, 112f, keyH),
+                    // The record key sits in the body's rounded corner.
+                    shape = RoundedCornerShape(bottomStart = u * BODY_CORNER),
                     latched = false,
                     onTap = onToggleLike,
                 ) {
@@ -499,17 +507,17 @@ fun Tp7Player(
                 }
 
                 // ---- Fader ----
-                Canvas(Modifier.at(360f, 510f, 110f, 160f)) {
-                    drawFader(level = volumeLevel, unit = u.toPx())
+                Canvas(Modifier.at(360f, 510f, 110f, 160f + extra)) {
+                    drawFader(level = volumeLevel, unit = u.toPx(), travel = faderTravel)
                 }
                 Box(
                     Modifier
-                        .at(360f, 505f, 110f, 170f)
+                        .at(360f, 505f, 110f, 170f + extra)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
                                 down.consume()
-                                val travel = FADER_TRAVEL * u.toPx()
+                                val travel = faderTravel * u.toPx()
                                 val top = (FADER_TOP - 505f) * u.toPx()
                                 fun levelAt(y: Float) = 1f - ((y - top) / travel).coerceIn(0f, 1f)
                                 setVolume(levelAt(down.position.y))
@@ -532,12 +540,12 @@ fun Tp7Player(
                 )
 
                 // ---- Knurled knob ----
-                Canvas(Modifier.at(375f, 680f, 86f, 100f)) {
+                Canvas(Modifier.at(375f, bodyH, 86f, 100f)) {
                     drawKnob(turn = volumeLevel, unit = u.toPx())
                 }
                 Box(
                     Modifier
-                        .at(365f, 680f, 106f, 110f)
+                        .at(365f, bodyH, 106f, 110f)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
@@ -588,6 +596,7 @@ private fun Oled(
     time: String,
     track: Int,
     units: (Float) -> androidx.compose.ui.unit.TextUnit,
+    unit: Dp,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -618,9 +627,11 @@ private fun Oled(
             Spacer(Modifier.weight(1f))
             Box(
                 Modifier
+                    .height(unit * 15)
                     .clip(RoundedCornerShape(3.dp))
                     .background(Color.White)
                     .padding(horizontal = 2.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "%02d".format(track.coerceIn(0, 99)),
@@ -629,6 +640,7 @@ private fun Oled(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
+                    style = TightText,
                 )
             }
             Spacer(Modifier.width(1.dp))
@@ -691,34 +703,37 @@ private fun Key(
     modifier: Modifier,
     latched: Boolean,
     onTap: () -> Unit,
+    shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
     glyph: DrawScope.() -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
     val down = pressed || latched
-    Box(modifier) {
+    Box(modifier.clip(shape)) {
         Canvas(Modifier.fillMaxSize()) {
-            val sink = if (down) size.height * 0.025f else 0f
-            // The gap the key sits in.
+            // The seam round the key.
             drawRect(Color(0xFF8D9094))
+            // Down reads as shade, not as a gap opening above the key: the
+            // face darkens and its lit top edge goes, and the glyph drops a
+            // touch.
             drawRect(
                 Brush.verticalGradient(
                     if (down) {
-                        listOf(Color(0xFFB9BBBF), Color(0xFFC9CBCE))
+                        listOf(Color(0xFFAEB1B5), Color(0xFFC4C6C9))
                     } else {
-                        listOf(Color(0xFFD6D7D9), Color(0xFFC3C5C8))
+                        listOf(Color(0xFFD8D9DB), Color(0xFFC3C5C8))
                     },
                 ),
-                topLeft = Offset(2f, sink + 2f),
-                size = Size(size.width - 4f, size.height - sink - 4f),
+                topLeft = Offset(2f, 2f),
+                size = Size(size.width - 4f, size.height - 4f),
             )
-            // The top edge catching the light.
             drawLine(
-                Color.White.copy(alpha = if (down) 0.25f else 0.7f),
-                Offset(2f, sink + 3f),
-                Offset(size.width - 2f, sink + 3f),
-                2f,
+                if (down) Color.Black.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.7f),
+                Offset(2f, 3f),
+                Offset(size.width - 2f, 3f),
+                if (down) 4f else 2f,
             )
-            translate(top = size.height * 0.30f + sink - size.height / 2) { glyph() }
+            val drop = if (down) size.height * 0.012f else 0f
+            translate(top = size.height * 0.30f + drop - size.height / 2) { glyph() }
         }
         PressArea(
             modifier = Modifier.fillMaxSize(),
@@ -856,7 +871,7 @@ private fun DrawScope.drawLever(tilt: Int, unit: Float) {
     drawCircle(Color(0xFFD9DADC), 3f * unit, Offset(barW + 4f * unit, pivotY))
 }
 
-private fun DrawScope.drawSideButton(pressed: Boolean) {
+private fun DrawScope.drawSideButton(pressed: Boolean, on: Boolean) {
     val inset = if (pressed) size.width * 0.35f else 0f
     drawRoundRect(
         Brush.horizontalGradient(listOf(Color(0xFFB9BCC0), Color(0xFFDADBDD), Color(0xFFA5A8AC))),
@@ -871,14 +886,24 @@ private fun DrawScope.drawSideButton(pressed: Boolean) {
         cornerRadius = CornerRadius(size.width * 0.4f),
         style = Stroke(1f),
     )
+    // Lit along its face while what it toggles is on.
+    if (on) {
+        val stripeW = size.width * 0.28f
+        drawRoundRect(
+            Color(0xFFFF6A1A),
+            topLeft = Offset(size.width - stripeW - size.width * 0.18f, size.height * 0.2f),
+            size = Size(stripeW, size.height * 0.6f),
+            cornerRadius = CornerRadius(stripeW / 2),
+        )
+    }
 }
 
 /** The rounded slot the + and − sit in, on the diagonal. */
 private fun DrawScope.drawVolumePill() {
     val w = size.width
     rotate(-45f) {
-        val pillW = w * 1.15f
-        val pillH = w * 0.48f
+        val pillW = w * 0.95f
+        val pillH = w * 0.40f
         drawRoundRect(
             Color(0xFFB4B7BB),
             topLeft = Offset(center.x - pillW / 2, center.y - pillH / 2),
@@ -895,7 +920,7 @@ private fun DrawScope.drawVolumePill() {
     }
 }
 
-private fun DrawScope.drawFader(level: Float, unit: Float) {
+private fun DrawScope.drawFader(level: Float, unit: Float, travel: Float) {
     val ox = 360f
     val oy = 510f
     fun x(v: Float) = (v - ox) * unit
@@ -904,18 +929,18 @@ private fun DrawScope.drawFader(level: Float, unit: Float) {
         drawRoundRect(
             Color(0xFF8A8D91),
             topLeft = Offset(x(slot) - 3f * unit, y(FADER_TOP) - 4f * unit),
-            size = Size(6f * unit, FADER_TRAVEL * unit + 8f * unit),
+            size = Size(6f * unit, travel * unit + 8f * unit),
             cornerRadius = CornerRadius(3f * unit),
         )
         drawRoundRect(
             Color(0xFF5E6165),
             topLeft = Offset(x(slot) - 1f * unit, y(FADER_TOP) - 2f * unit),
-            size = Size(2f * unit, FADER_TRAVEL * unit + 4f * unit),
+            size = Size(2f * unit, travel * unit + 4f * unit),
             cornerRadius = CornerRadius(1f * unit),
         )
     }
     // The cap: a crosshair across both slots, at the level.
-    val capY = y(FADER_TOP) + (1f - level.coerceIn(0f, 1f)) * FADER_TRAVEL * unit
+    val capY = y(FADER_TOP) + (1f - level.coerceIn(0f, 1f)) * travel * unit
     drawLine(Color(0xFF55585D), Offset(x(372f), capY), Offset(x(452f), capY), 1.6f * unit)
     for (slot in listOf(397f, 427f)) {
         drawRoundRect(
@@ -964,15 +989,32 @@ private fun formatOledTime(ms: Long): String {
 }
 
 // The photo's grid: body 470 × 680, with the lever, antenna and knob around it.
-private const val OX = 42f
+private const val OX = 34f
 private const val OY = 45f
 private const val GRID_W = 512f
 private const val GRID_H = 825f
 private const val BODY_W = 470f
 private const val BODY_H = 680f
+private const val BODY_CORNER = 18.8f
+private const val KEY_TOP = 516f
+private const val KEY_H = 164f
+/** How much taller the lower half may grow into a tall screen. */
+private const val MAX_EXTRA = 100f
 private const val HUB_R = 43f
 private const val FADER_TOP = 520f
 private const val FADER_TRAVEL = 132f
+
+/**
+ * Text sized to its glyphs: without the font's own padding above and below,
+ * a letter set in a small box is centred in it rather than pushed out of it.
+ */
+private val TightText = androidx.compose.ui.text.TextStyle(
+    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+        trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+    ),
+)
 
 // Player.REPEAT_MODE_* without pulling Media3 into the drawing.
 private const val REPEAT_OFF = 0
