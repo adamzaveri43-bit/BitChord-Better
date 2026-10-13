@@ -83,7 +83,12 @@ object IdleActivity {
     val lastInteraction: StateFlow<Long> = _lastInteraction.asStateFlow()
 
     fun poke() {
-        _lastInteraction.value = SystemClock.uptimeMillis()
+        // Once a second is plenty for a timer counted in tens of seconds. A
+        // scroll reports every frame, and each report would otherwise wake the
+        // idle screen's timer and recompose it at the screen's refresh rate.
+        val now = SystemClock.uptimeMillis()
+        if (now - _lastInteraction.value < POKE_INTERVAL_MS) return
+        _lastInteraction.value = now
     }
 }
 
@@ -404,4 +409,5 @@ private fun AppleMusicIdleFace(
 /** Enough over-scan that a [DRIFT_DP] nudge can't uncover an edge. */
 private const val FULL_BLEED_SCALE = 1.04f
 private const val PAUSED_GRACE_MS = 60_000L
+private const val POKE_INTERVAL_MS = 1_000L
 private const val DRIFT_DP = 6

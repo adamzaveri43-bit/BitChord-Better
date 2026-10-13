@@ -1,20 +1,12 @@
 package com.music.bitchord.ui.player
 
-import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,12 +14,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
@@ -42,7 +34,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -50,33 +41,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.PlaybackPosition
-import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 
 /**
- * An always-on face drawn after the first stereo cassette Walkman: an upright
- * blue body with its top panel and orange hotline button, the cassette turned
- * on its side behind a narrow smoked window, the outlined STEREO lettering and
- * the arrow, and the brushed-silver side panel with its keys and volume slide.
+ * An idle face drawn after the front of the first stereo cassette Walkman,
+ * the TPS-L2, filling the screen.
  *
- * Display only — it lives on the idle screen, where any touch wakes the app.
- * What moves is what would: the reels turn while the music plays, the tape
- * passing from the bottom reel to the top across the song, each reel turning
- * at the rate its own pack gives; PLAY sits pushed in while playing; the
- * volume slide stands where the volume is. The track is written on the
- * cassette's label, and the time sits above the player, lock-screen style.
+ * Only the front: the blue face with its top panel — the maker's name, the
+ * model line, the two headphone jacks and the orange hotline button along the
+ * top edge — the outlined STEREO, the cassette on its side behind its smoked
+ * window, and the arrow. The silver side panel, with its keys, microphone and
+ * volume slide, is the device's side rather than its front, and on a face
+ * that's only looked at they would be nothing but clutter; leaving them off
+ * gives the window the room.
  *
- * No maker's name on it, only what the device says about itself.
+ * Display only: on the idle screen any touch wakes the app. The reels turn
+ * while the music plays, the tape passing from the bottom reel to the top
+ * across the song, each turning at the rate its own pack gives for tape
+ * running at a steady speed; the track is written along the cassette's label.
+ *
+ * Drawn in layers so that only the reels redraw while they turn — the body,
+ * the printing and the glass are drawn once — and the reels update at 30 fps,
+ * which is all a turning sprocket needs, on a screen left on for hours.
  */
 @Composable
 fun WalkmanFace(
@@ -86,143 +76,190 @@ fun WalkmanFace(
     durationMs: Long,
     modifier: Modifier = Modifier,
 ) {
-    val volume = remember { PlayerPlatform.host.volume }
-    val volumeLevel by volume.level.collectAsState()
-
-    var tapeTravel by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) return@LaunchedEffect
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                if (last != 0L) tapeTravel += (now - last) / 1_000_000_000f
-                last = now
-            }
-        }
-    }
     val progress = if (durationMs > 0) {
         (position.positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
     } else {
         0f
     }
+    val currentProgress by rememberUpdatedState(progress)
 
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .clipToBounds(),
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val density = LocalDensity.current
-            // Drawn to the width of the screen. The height the width leaves
-            // over goes into the blue body below the window and into the silver
-            // panel's slide, so nothing is cut off and nothing is left black.
-            val u: Dp = maxWidth / GRID_W
-            val extra = (maxHeight / u - GRID_H).coerceAtLeast(0f)
-            // The cassette sits in the middle of that room, not at its top.
-            val mid = extra * 0.5f
-            fun units(n: Float) = with(density) { (u * n).toSp() }
-            fun Modifier.at(x: Float, y: Float, w: Float, h: Float): Modifier =
-                this.offset(u * x, u * y).size(u * w, u * h)
-
-            Box(Modifier.size(u * GRID_W, maxHeight)) {
-                Canvas(Modifier.fillMaxSize()) {
-                    drawWalkman(
-                        unit = u.toPx(),
-                        progress = progress,
-                        tapeTravel = tapeTravel,
-                        playing = isPlaying,
-                        volume = volumeLevel,
-                        extra = extra,
-                        mid = mid,
-                    )
-                }
-                // ---- Printing on the top panel ----
-                Text(
-                    text = "STEREO CASSETTE PLAYER",
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = units(19f),
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = units(0.6f),
-                    maxLines = 1,
-                    modifier = Modifier.at(36f, 196f, 420f, 30f),
-                )
-                Text(
-                    text = "HEADPHONES  A    B",
-                    color = Color.White.copy(alpha = 0.75f),
-                    fontSize = units(11f),
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    modifier = Modifier.at(312f, 104f, 170f, 30f),
-                )
-                // ---- The big outlined STEREO ----
-                Text(
-                    text = "STEREO",
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = units(84f),
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    style = TextStyle(drawStyle = DrawStroke(width = with(density) { (u * 2.4f).toPx() })),
-                    modifier = Modifier.at(62f, 300f, 420f, 110f),
-                )
-                // ---- The track, written on the cassette's label ----
-                Box(
-                    Modifier
-                        .at(WIN_X + WIN_W - 40f, WIN_Y + mid + 14f, 38f, WIN_H - 28f)
-                        .quarterTurn(),
-                ) {
-                    Text(
-                        text = song.title,
-                        color = InkColor,
-                        fontSize = units(27f),
-                        fontFamily = FontFamily.Cursive,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = u * 10),
-                    )
-                }
-                Box(
-                    Modifier
-                        .at(WIN_X + 4f, WIN_Y + mid + 14f, 36f, WIN_H - 28f)
-                        .quarterTurn(),
-                ) {
-                    Text(
-                        text = song.artist,
-                        color = InkColor.copy(alpha = 0.85f),
-                        fontSize = units(22f),
-                        fontFamily = FontFamily.Cursive,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = u * 10),
-                    )
-                }
-                // ---- Engraving on the silver panel ----
-                Text(
-                    text = "STOP\nEJECT",
-                    color = Engraving,
-                    fontSize = units(11f),
-                    lineHeight = units(12f),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.at(486f, 492f, 60f, 32f),
-                )
-                Box(
-                    Modifier
-                        .at(510f, 790f + mid, 22f, 110f)
-                        .quarterTurn(),
-                ) {
-                    Text(
-                        text = "VOLUME",
-                        color = Engraving,
-                        fontSize = units(11f),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = units(1f),
-                        maxLines = 1,
-                    )
+    // Each reel's own angle, advanced a little each frame by how fast that
+    // reel turns at that moment. (Working the angle out from the tape played
+    // so far over the reel's current size made the whole angle jump every
+    // time the size moved.)
+    var topAngle by remember { mutableFloatStateOf(0f) }
+    var bottomAngle by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (last == 0L) {
+                    last = now
+                } else if (now - last >= REEL_FRAME_NANOS) {
+                    val dt = (now - last) / 1_000_000_000f
+                    last = now
+                    val p = currentProgress
+                    topAngle = (topAngle + dt * reelDegreesPerSecond(packRadius(p, top = true))) % 360f
+                    bottomAngle = (bottomAngle + dt * reelDegreesPerSecond(packRadius(p, top = false))) % 360f
                 }
             }
         }
     }
+
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(BlueBottom)
+            .clipToBounds(),
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            // Drawn to the width; the face runs the full height, with the
+            // window centred in whatever room is below the lettering.
+            val u: Dp = maxWidth / GRID_W
+            val gridH = (maxHeight / u).coerceAtLeast(MIN_GRID_H)
+            val geo = remember(gridH) { WalkmanGeometry(gridH) }
+            fun units(n: Float) = with(density) { (u * n).toSp() }
+            fun Modifier.at(x: Float, y: Float, w: Float, h: Float): Modifier =
+                this.offset(u * x, u * y).size(u * w, u * h)
+
+            // ---- Static: body, panel, window frame, the cassette's paper ----
+            Canvas(Modifier.fillMaxSize()) { drawBodyAndPaper(u.toPx(), geo) }
+
+            // ---- The only part that moves ----
+            Canvas(Modifier.fillMaxSize()) {
+                drawReels(u.toPx(), geo, progress, topAngle, bottomAngle)
+            }
+
+            // ---- The track, written along the cassette's label ----
+            Box(
+                Modifier
+                    .at(geo.winX + geo.winW - 42f, geo.winY + 16f, 38f, geo.winH - 32f)
+                    .quarterTurn(),
+            ) {
+                Text(
+                    text = song.title,
+                    color = InkColor,
+                    fontSize = units(28f),
+                    fontFamily = FontFamily.Cursive,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = u * 10),
+                )
+            }
+            Box(
+                Modifier
+                    .at(geo.winX + 4f, geo.winY + 16f, 38f, geo.winH - 32f)
+                    .quarterTurn(),
+            ) {
+                Text(
+                    text = song.artist,
+                    color = InkColor.copy(alpha = 0.85f),
+                    fontSize = units(23f),
+                    fontFamily = FontFamily.Cursive,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = u * 10),
+                )
+            }
+
+            // ---- The glass over the window, and the arrow ----
+            Canvas(Modifier.fillMaxSize()) { drawGlassAndArrow(u.toPx(), geo) }
+
+            // ---- Printing ----
+            Text(
+                text = "SONY",
+                color = Color.White,
+                fontSize = units(74f),
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = units(5f),
+                maxLines = 1,
+                modifier = Modifier.at(40f, 78f, 330f, 96f),
+            )
+            Text(
+                text = "STEREO CASSETTE PLAYER  TPS-L2",
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = units(19f),
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = units(0.6f),
+                maxLines = 1,
+                modifier = Modifier.at(42f, 186f, 520f, 30f),
+            )
+            Text(
+                text = "HEADPHONES",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = units(12f),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = units(1f),
+                maxLines = 1,
+                modifier = Modifier.at(418f, 58f, 160f, 28f),
+            )
+            Text(
+                text = "A",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = units(12f),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.at(437f, 86f, 24f, 26f),
+            )
+            Text(
+                text = "B",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = units(12f),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.at(517f, 98f, 24f, 26f),
+            )
+            Text(
+                text = "STEREO",
+                color = Color.White.copy(alpha = 0.92f),
+                fontSize = units(100f),
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                style = TextStyle(drawStyle = Stroke(width = with(density) { (u * 2.6f).toPx() })),
+                modifier = Modifier.at(84f, STEREO_Y, 480f, 130f),
+            )
+        }
+    }
+}
+
+/**
+ * Where everything goes for a face [gridH] units tall: the window takes the
+ * room below the lettering, as large as the cassette's proportions allow,
+ * centred in it.
+ */
+private class WalkmanGeometry(val gridH: Float) {
+    private val roomTop = STEREO_Y + 140f
+    private val roomBottom = gridH - 50f
+    private val room = (roomBottom - roomTop).coerceAtLeast(300f)
+    val winH = minOf(room - 40f, MAX_WIN_W / WIN_ASPECT)
+    val winW = winH * WIN_ASPECT
+    val winX = 104f
+    val winY = roomTop + (room - winH) / 2f
+    val cx = winX + winW / 2f
+    val topY = winY + winH * 0.24f
+    val bottomY = winY + winH * 0.76f
+    val hub = winW * 0.10f
+    val full = winW * 0.26f
+}
+
+/** The cassette's window is a little under half as wide as it's tall. */
+private const val WIN_ASPECT = 0.43f
+private const val MAX_WIN_W = 300f
+
+/** How far round a reel of [radius] turns in a second, with the tape running at a steady speed. */
+private fun reelDegreesPerSecond(radius: Float): Float =
+    (TAPE_SPEED / radius.coerceAtLeast(1f)) * (180f / PI.toFloat())
+
+/** A reel's pack, as a fraction of the way from bare hub to full, in window-width units. */
+private fun packRadius(progress: Float, top: Boolean): Float {
+    // Measured against a reference window so the turning rate doesn't depend
+    // on the screen; the drawing scales the same fraction to the real window.
+    val hub = REF_WIN_W * 0.10f
+    val full = REF_WIN_W * 0.26f
+    val f = if (top) progress else 1f - progress
+    return hub + (full - hub) * f
 }
 
 /** Lays the content out along its box's length and turns it to read bottom to top. */
@@ -231,7 +268,6 @@ private fun Modifier.quarterTurn(): Modifier = layout { measurable, constraints 
     val h = constraints.maxHeight
     val placeable = measurable.measure(Constraints(maxWidth = h, maxHeight = w))
     layout(w, h) {
-        // Centred across the box, starting at its bottom once turned.
         placeable.placeWithLayer(
             x = (w - placeable.width) / 2,
             y = (h - placeable.height) / 2,
@@ -245,213 +281,129 @@ private fun Modifier.quarterTurn(): Modifier = layout { measurable, constraints 
 
 private val BlueTop = Color(0xFF34569F)
 private val BlueBottom = Color(0xFF1D3778)
-private val Engraving = Color(0xFF4A5059)
 private val InkColor = Color(0xFF1F2A5A)
 private val LabelPaper = Color(0xFFEDE6D3)
 private val TapeColor = Color(0xFF3A2619)
 
-private fun DrawScope.drawWalkman(
-    unit: Float,
-    progress: Float,
-    tapeTravel: Float,
-    playing: Boolean,
-    volume: Float,
-    extra: Float,
-    mid: Float,
-) {
+private fun DrawScope.drawBodyAndPaper(unit: Float, g: WalkmanGeometry) {
     fun o(x: Float, y: Float) = Offset(x * unit, y * unit)
     fun sz(w: Float, h: Float) = Size(w * unit, h * unit)
     fun r(v: Float) = CornerRadius(v * unit)
 
-    // ---- Orange hotline button, standing up from the top ----
-    drawRoundRect(
-        Brush.verticalGradient(listOf(Color(0xFFFFC23A), Color(0xFFF29100)), startY = 18 * unit, endY = 80 * unit),
-        o(150f, 18f), sz(96f, 62f), r(7f),
-    )
-    drawRoundRect(Color(0xFFC46F00), o(150f, 18f), sz(96f, 62f), r(7f), style = Stroke(1.5f * unit))
-
-    // ---- Body ----
-    drawRoundRect(
+    // The blue face.
+    drawRect(
         Brush.linearGradient(
             listOf(BlueTop, Color(0xFF28478C), BlueBottom),
-            start = o(0f, 60f),
-            end = o(GRID_W, GRID_H + extra),
+            start = Offset.Zero,
+            end = o(GRID_W, g.gridH),
         ),
-        o(0f, 60f), sz(GRID_W, GRID_H + extra - 60f), r(24f),
     )
-    // Top panel: a touch lighter, and its seam.
+    // Top panel: a touch lighter, and the seam under it.
+    drawRect(Color.White.copy(alpha = 0.05f), Offset.Zero, sz(GRID_W, PANEL_H))
+    drawLine(Color.Black.copy(alpha = 0.35f), o(0f, PANEL_H), o(GRID_W, PANEL_H), 2.5f * unit)
+    drawLine(Color.White.copy(alpha = 0.12f), o(0f, PANEL_H + 3f), o(GRID_W, PANEL_H + 3f), 1.5f * unit)
+
+    // The orange hotline button, along the top edge.
     drawRoundRect(
-        Color.White.copy(alpha = 0.05f),
-        o(0f, 60f), sz(GRID_W, 210f), r(24f),
+        Brush.verticalGradient(listOf(Color(0xFFF29100), Color(0xFFFFC23A)), startY = 0f, endY = 34f * unit),
+        o(176f, -10f), sz(110f, 44f), r(8f),
     )
-    drawLine(Color.Black.copy(alpha = 0.35f), o(0f, 270f), o(SILVER_X, 270f), 2.5f * unit)
-    drawLine(Color.White.copy(alpha = 0.12f), o(0f, 273f), o(SILVER_X, 273f), 1.5f * unit)
+    drawRoundRect(Color(0xFFC46F00), o(176f, -10f), sz(110f, 44f), r(8f), style = Stroke(1.5f * unit))
+
     // Headphone jacks.
-    for (c in listOf(o(352f, 160f), o(420f, 172f))) {
-        drawCircle(Color(0xFF3E9A55), 17f * unit, c)
-        drawCircle(Color(0xFF9FD8A9), 17f * unit, c, style = Stroke(2f * unit))
-        drawCircle(Color(0xFF0B0E14), 9f * unit, c)
+    for (c in listOf(o(445f, 140f), o(525f, 152f))) {
+        drawCircle(Color(0xFF3E9A55), 18f * unit, c)
+        drawCircle(Color(0xFF9FD8A9), 18f * unit, c, style = Stroke(2f * unit))
+        drawCircle(Color(0xFF0B0E14), 9.5f * unit, c)
     }
 
-    // ---- Cassette window ----
-    val wy = WIN_Y + mid
-    val win = RoundRect(WIN_X * unit, wy * unit, (WIN_X + WIN_W) * unit, (wy + WIN_H) * unit, r(12f))
-    drawRoundRect(Color(0xFF0A0E19), o(WIN_X - 8f, wy - 8f), sz(WIN_W + 16f, WIN_H + 16f), r(16f))
+    // The window's frame, and the cassette's label paper behind the glass.
+    drawRoundRect(Color(0xFF0A0E19), o(g.winX - 9f, g.winY - 9f), sz(g.winW + 18f, g.winH + 18f), r(16f))
+    val win = RoundRect(g.winX * unit, g.winY * unit, (g.winX + g.winW) * unit, (g.winY + g.winH) * unit, r(12f))
     clipPath(Path().apply { addRoundRect(win) }) {
-        drawCassetteOnSide(unit, progress, tapeTravel, shift = mid)
-        // The smoked pane over it.
-        drawRect(Color(0xFF0D1A3A).copy(alpha = 0.28f), o(WIN_X, wy), sz(WIN_W, WIN_H))
+        drawRect(LabelPaper, o(g.winX, g.winY), sz(g.winW, g.winH))
+        // The coloured band along the label.
+        drawRect(Color(0xFFE8622A), o(g.winX + g.winW - 48f, g.winY), sz(4f, g.winH))
+        // The cassette's own clear window, between the hubs.
+        drawRoundRect(
+            Color(0xFF2A211B),
+            o(g.cx - g.winW * 0.18f, g.topY - g.full * 0.75f),
+            sz(g.winW * 0.36f, g.bottomY - g.topY + g.full * 1.5f),
+            r(g.winW * 0.18f),
+        )
+        drawRect(
+            Color(0xFFC7CCD2).copy(alpha = 0.85f),
+            o(g.cx - g.winW * 0.11f, g.topY + g.hub * 1.4f),
+            sz(g.winW * 0.22f, g.bottomY - g.topY - g.hub * 2.8f),
+        )
+    }
+}
+
+/** The tape packs and the two hubs: the only things that change while it plays. */
+private fun DrawScope.drawReels(
+    unit: Float,
+    g: WalkmanGeometry,
+    progress: Float,
+    topAngle: Float,
+    bottomAngle: Float,
+) {
+    val win = RoundRect(g.winX * unit, g.winY * unit, (g.winX + g.winW) * unit, (g.winY + g.winH) * unit, CornerRadius(12f * unit))
+    val scale = g.winW / REF_WIN_W
+    val topC = Offset(g.cx * unit, g.topY * unit)
+    val bottomC = Offset(g.cx * unit, g.bottomY * unit)
+    clipPath(Path().apply { addRoundRect(win) }) {
+        drawCircle(TapeColor, packRadius(progress, top = true) * scale * unit, topC)
+        drawCircle(TapeColor, packRadius(progress, top = false) * scale * unit, bottomC)
+        drawReelHub(topC, g.hub * unit, topAngle)
+        drawReelHub(bottomC, g.hub * unit, bottomAngle)
+    }
+}
+
+/** The smoked pane over the window, and the outlined arrow beside it. */
+private fun DrawScope.drawGlassAndArrow(unit: Float, g: WalkmanGeometry) {
+    fun o(x: Float, y: Float) = Offset(x * unit, y * unit)
+    fun sz(w: Float, h: Float) = Size(w * unit, h * unit)
+    val win = RoundRect(g.winX * unit, g.winY * unit, (g.winX + g.winW) * unit, (g.winY + g.winH) * unit, CornerRadius(12f * unit))
+    clipPath(Path().apply { addRoundRect(win) }) {
+        drawRect(Color(0xFF0D1A3A).copy(alpha = 0.26f), o(g.winX, g.winY), sz(g.winW, g.winH))
         drawRect(
             Brush.linearGradient(
                 0f to Color.White.copy(alpha = 0.14f),
                 0.3f to Color.White.copy(alpha = 0.03f),
                 0.31f to Color.Transparent,
-                start = o(WIN_X, wy),
-                end = o(WIN_X + WIN_W, wy + WIN_H),
+                start = o(g.winX, g.winY),
+                end = o(g.winX + g.winW, g.winY + g.winH),
             ),
-            o(WIN_X, wy), sz(WIN_W, WIN_H),
+            o(g.winX, g.winY), sz(g.winW, g.winH),
         )
     }
-
-    // ---- The arrow, the way the tape runs ----
+    // The arrow: the way the tape runs, beside the lower half of the window.
+    val ax = g.winX + g.winW + 70f
+    val bottom = g.winY + g.winH * 0.88f
+    val tip = g.winY + g.winH * 0.58f
+    val shaft = 15f
+    val head = 38f
+    val neck = tip + 62f
     val arrow = Path().apply {
-        moveTo(355f * unit, (905f + mid) * unit)
-        lineTo(355f * unit, (820f + mid) * unit)
-        lineTo(332f * unit, (820f + mid) * unit)
-        lineTo(370f * unit, (760f + mid) * unit)
-        lineTo(408f * unit, (820f + mid) * unit)
-        lineTo(385f * unit, (820f + mid) * unit)
-        lineTo(385f * unit, (905f + mid) * unit)
+        moveTo((ax - shaft) * unit, bottom * unit)
+        lineTo((ax - shaft) * unit, neck * unit)
+        lineTo((ax - head) * unit, neck * unit)
+        lineTo(ax * unit, tip * unit)
+        lineTo((ax + head) * unit, neck * unit)
+        lineTo((ax + shaft) * unit, neck * unit)
+        lineTo((ax + shaft) * unit, bottom * unit)
         close()
     }
-    drawPath(arrow, Color.White.copy(alpha = 0.88f), style = Stroke(2.4f * unit, join = StrokeJoin.Miter))
-    // A screw in the blue.
-    drawCircle(Color(0xFF0E1630), 7f * unit, o(445f, 1000f + mid))
-
-    // ---- Silver side panel ----
-    drawRoundRect(
-        Brush.horizontalGradient(
-            listOf(Color(0xFFC9CDD3), Color(0xFFE6E8EB), Color(0xFFB4B9C0), Color(0xFFD3D6DA)),
-            startX = SILVER_X * unit,
-            endX = GRID_W * unit,
-        ),
-        o(SILVER_X, 150f), sz(GRID_W - SILVER_X, GRID_H + extra - 150f), r(20f),
-    )
-    // Square off its left edge where it meets the blue.
-    drawRect(Color(0xFFC9CDD3), o(SILVER_X, 150f), sz(20f, GRID_H + extra - 150f))
-    drawLine(Color.Black.copy(alpha = 0.3f), o(SILVER_X, 150f), o(SILVER_X, GRID_H + extra), 1.5f * unit)
-    // Brushed grain.
-    var y = 152f
-    while (y < GRID_H + extra - 4f) {
-        drawLine(Color.White.copy(alpha = 0.07f), o(SILVER_X + 2f, y), o(GRID_W - 4f, y), 1f)
-        y += 3f
-    }
-
-    // Microphone grille.
-    drawRoundRect(Color(0xFFB9BEC5), o(482f, 200f), sz(52f, 100f), r(6f))
-    drawRoundRect(Color(0xFF8C9199), o(482f, 200f), sz(52f, 100f), r(6f), style = Stroke(1.2f * unit))
-    var gy = 210f
-    while (gy < 295f) {
-        var gx = 490f
-        while (gx < 530f) {
-            drawCircle(Color(0xFF6A7078), 2.2f * unit, o(gx, gy))
-            gx += 8f
-        }
-        gy += 8f
-    }
-
-    // Keys: REW and FF small, up the right; STOP/EJECT and PLAY large.
-    drawSideKey(unit, x = 542f, y = 170f, w = 52f, h = 72f, pushed = false)
-    drawSideKey(unit, x = 542f, y = 250f, w = 52f, h = 72f, pushed = false)
-    drawSideKey(unit, x = 482f, y = 330f, w = 54f, h = 150f, pushed = false)
-    drawSideKey(unit, x = 542f, y = 340f, w = 52f, h = 150f, pushed = playing)
-
-    // ---- Volume slide ----
-    val slotTop = 560f
-    val slotH = 330f + extra
-    drawRoundRect(Color(0xFF7D838B), o(548f, slotTop), sz(30f, slotH), r(5f))
-    drawRoundRect(Color(0xFF4D5259), o(556f, slotTop + 6f), sz(14f, slotH - 12f), r(4f))
-    for (i in 0..10) {
-        val ty = slotTop + 10f + i * (slotH - 20f) / 10f
-        drawLine(Engraving, o(536f, ty), o(if (i % 5 == 0) 546f else 542f, ty), 1.4f * unit)
-    }
-    val thumbY = slotTop + 8f + (1f - volume.coerceIn(0f, 1f)) * (slotH - 76f)
-    drawRoundRect(
-        Brush.horizontalGradient(listOf(Color(0xFFDDE0E4), Color(0xFF9AA0A8)), startX = 544f * unit, endX = 582f * unit),
-        o(544f, thumbY), sz(38f, 60f), r(4f),
-    )
-    var ry = thumbY + 6f
-    while (ry < thumbY + 56f) {
-        drawLine(Color.Black.copy(alpha = 0.3f), o(548f, ry), o(578f, ry), 1.2f * unit)
-        ry += 5f
-    }
-    // Tone hole near the foot.
-    drawCircle(Color(0xFF3E434A), 11f * unit, o(560f, 960f + extra))
-    drawCircle(Color(0xFF15171A), 7f * unit, o(560f, 960f + extra))
+    drawPath(arrow, Color.White.copy(alpha = 0.88f), style = Stroke(2.6f * unit, join = StrokeJoin.Miter))
+    // The small hole beside the window.
+    drawCircle(Color(0xFF0E1630), 7f * unit, o(ax + 20f, g.winY + g.winH * 0.42f))
 }
 
-/** A ribbed key on the silver panel; pushed in, it sits back and darker. */
-private fun DrawScope.drawSideKey(unit: Float, x: Float, y: Float, w: Float, h: Float, pushed: Boolean) {
-    val dx = if (pushed) -5f else 0f
-    val left = (x + dx) * unit
-    drawRoundRect(Color.Black.copy(alpha = 0.25f), Offset(left + 2f * unit, (y + 3f) * unit), Size(w * unit, h * unit), CornerRadius(5f * unit))
-    drawRoundRect(
-        Brush.horizontalGradient(
-            if (pushed) listOf(Color(0xFF9EA4AC), Color(0xFFB8BDC4)) else listOf(Color(0xFFE2E5E8), Color(0xFFAEB3BA)),
-            startX = left,
-            endX = left + w * unit,
-        ),
-        Offset(left, y * unit), Size(w * unit, h * unit), CornerRadius(5f * unit),
-    )
-    var ry = y + 6f
-    while (ry < y + h - 4f) {
-        drawLine(Color.Black.copy(alpha = 0.16f), Offset(left + 4f * unit, ry * unit), Offset(left + (w - 4f) * unit, ry * unit), 1.2f * unit)
-        ry += 4.5f
-    }
-}
-
-/**
- * The cassette behind the window, lying on its side: label paper round the
- * two hubs, the clear tape window between them, and the packs of tape.
- */
-private fun DrawScope.drawCassetteOnSide(unit: Float, progress: Float, tapeTravel: Float, shift: Float) {
-    val wy = WIN_Y + shift
-    val cx = (WIN_X + WIN_W / 2) * unit
-    drawRect(LabelPaper, Offset(WIN_X * unit, wy * unit), Size(WIN_W * unit, WIN_H * unit))
-    // The coloured band across the label.
-    drawRect(Color(0xFFE8622A), Offset((WIN_X + WIN_W - 44f) * unit, wy * unit), Size(4f * unit, WIN_H * unit))
-
-    val hub = 22f * unit
-    // Kept clear of the strips either side, where the label's written on.
-    val full = 56f * unit
-    val topC = Offset(cx, (wy + 105f) * unit)
-    val bottomC = Offset(cx, (wy + WIN_H - 105f) * unit)
-    // Tape runs bottom to top, as the arrow says.
-    val bottomPack = hub + (full - hub) * (1f - progress)
-    val topPack = hub + (full - hub) * progress
-
-    // The clear window in the cassette's middle, and the tape across it.
-    val midTop = topC.y + 30f * unit
-    val midBottom = bottomC.y - 30f * unit
-    drawRoundRect(
-        Color(0xFF2A211B),
-        Offset(cx - 36f * unit, topC.y - 50f * unit),
-        Size(72f * unit, bottomC.y - topC.y + 100f * unit),
-        CornerRadius(36f * unit),
-    )
-    drawRect(Color(0xFFC7CCD2).copy(alpha = 0.85f), Offset(cx - 22f * unit, midTop), Size(44f * unit, midBottom - midTop))
-
-    drawCircle(TapeColor, topPack, topC)
-    drawCircle(TapeColor, bottomPack, bottomC)
-    drawReelHub(topC, hub, tapeTravel / topPack * REEL_RATE * unit)
-    drawReelHub(bottomC, hub, tapeTravel / bottomPack * REEL_RATE * unit)
-}
-
-/** A white sprocket with its six drive teeth, turned by [angleRad]. */
-private fun DrawScope.drawReelHub(center: Offset, radius: Float, angleRad: Float) {
+/** A white sprocket with its six drive teeth, turned by [angleDeg]. */
+private fun DrawScope.drawReelHub(center: Offset, radius: Float, angleDeg: Float) {
     drawCircle(Color(0xFFF2F2F2), radius, center)
     drawCircle(Color(0xFF1A1410), radius * 0.62f, center)
-    rotate(Math.toDegrees(angleRad.toDouble()).toFloat(), center) {
+    rotate(angleDeg, center) {
         for (i in 0 until 6) {
             val a = (i * PI / 3).toFloat()
             val dir = Offset(cos(a), sin(a))
@@ -466,14 +418,13 @@ private fun DrawScope.drawReelHub(center: Offset, radius: Float, angleRad: Float
     }
 }
 
-// The face's grid: the body and its silver panel, with the hotline button
-// standing above.
 private const val GRID_W = 600f
-private const val GRID_H = 1040f
-private const val SILVER_X = 470f
-private const val WIN_X = 110f
-private const val WIN_Y = 440f
-private const val WIN_W = 200f
-private const val WIN_H = 470f
-/** Scales tape travel into reel turns, for a believable playing speed. */
-private const val REEL_RATE = 120f
+private const val MIN_GRID_H = 1000f
+private const val PANEL_H = 250f
+private const val STEREO_Y = 300f
+/** The window width the turning rates are worked out against. */
+private const val REF_WIN_W = 250f
+/** Tape speed, in reference units a second: about half a turn a second off a bare hub. */
+private const val TAPE_SPEED = 80f
+/** 30 fps: plenty for a turning sprocket, and a third of the work at 90 Hz. */
+private const val REEL_FRAME_NANOS = 33_000_000L
