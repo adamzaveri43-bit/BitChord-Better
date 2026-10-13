@@ -59,6 +59,11 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.view.WindowCompat
+import android.app.Activity
+import android.content.ContextWrapper
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,8 +91,7 @@ import kotlin.math.min
  * - Holding the centre button opens the track's menu.
  * - MENU puts the player away, the arrows skip, the bottom plays and pauses.
  *
- * The finish follows the app's theme: black in the dark, white in the light,
- * as the two colours the thing was actually sold in.
+ * Always the white iPod, whatever the app's theme.
  */
 @Composable
 fun IpodPlayer(
@@ -199,12 +203,33 @@ fun IpodPlayer(
     )
 }
 
-/** The black or white finish, after the app's theme. */
+/**
+ * Dark status and navigation bar icons while the white body is under them,
+ * put back as they were when it goes. Works in the activity's window and in
+ * the player sheet's, whichever this is drawn in.
+ */
 @Composable
-internal fun rememberIpodFinish(): IpodFinish {
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    return if (dark) IpodFinish.Black else IpodFinish.White
+private fun DarkSystemBarIcons() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window
+            ?: (view.context as? Activity)?.window
+            ?: (view.context as? ContextWrapper)?.baseContext?.let { it as? Activity }?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val status = controller?.isAppearanceLightStatusBars
+        val nav = controller?.isAppearanceLightNavigationBars
+        controller?.isAppearanceLightStatusBars = true
+        controller?.isAppearanceLightNavigationBars = true
+        onDispose {
+            if (status != null) controller.isAppearanceLightStatusBars = status
+            if (nav != null) controller.isAppearanceLightNavigationBars = nav
+        }
+    }
 }
+
+/** The iPod's finish: the white one, in either theme. */
+@Composable
+internal fun rememberIpodFinish(): IpodFinish = IpodFinish.White
 
 /**
  * The iPod itself: the body, the LCD up top and the wheel below, laid out the
@@ -218,6 +243,7 @@ internal fun IpodBody(
     wheel: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    DarkSystemBarIcons()
     Box(
         modifier
             .fillMaxSize()
@@ -235,17 +261,16 @@ internal fun IpodBody(
                     .fillMaxWidth()
                     .aspectRatio(SCREEN_ASPECT),
             )
-            Box(
+            BoxWithConstraints(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                wheel(
-                    Modifier
-                        .fillMaxHeight(0.92f)
-                        .aspectRatio(1f, matchHeightConstraintsFirst = true),
-                )
+                // Whichever runs out first: on a tall phone the space below
+                // the LCD is taller than it is wide, and a wheel sized to the
+                // height ran off both sides of the screen.
+                wheel(Modifier.size(minOf(maxWidth * WHEEL_WIDTH, maxHeight * WHEEL_HEIGHT)))
             }
         }
     }
@@ -863,6 +888,9 @@ private fun formatClock(ms: Long): String {
 }
 
 private const val SCREEN_ASPECT = 4f / 3f
+/** The wheel's share of the body's width and of the room under the LCD. */
+private const val WHEEL_WIDTH = 0.86f
+private const val WHEEL_HEIGHT = 0.92f
 private const val REFLECTION = 0.28f
 private const val CENTER_RATIO = 0.38f
 /** 24 clicks a turn, about where the real wheel's felt. */
