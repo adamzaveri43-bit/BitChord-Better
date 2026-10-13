@@ -3,6 +3,7 @@ package com.music.bitchord.ui.player
 import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -109,161 +109,120 @@ fun WalkmanFace(
     Box(
         modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .clipToBounds(),
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Clock()
-            Spacer(Modifier.height(14.dp))
-            BoxWithConstraints(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                val u: Dp = minOf(maxWidth / GRID_W, maxHeight / GRID_H)
-                val density = LocalDensity.current
-                fun units(n: Float) = with(density) { (u * n).toSp() }
-                fun Modifier.at(x: Float, y: Float, w: Float, h: Float): Modifier =
-                    this.offset(u * x, u * y).size(u * w, u * h)
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            // Drawn to the width of the screen. The height the width leaves
+            // over goes into the blue body below the window and into the silver
+            // panel's slide, so nothing is cut off and nothing is left black.
+            val u: Dp = maxWidth / GRID_W
+            val extra = (maxHeight / u - GRID_H).coerceAtLeast(0f)
+            // The cassette sits in the middle of that room, not at its top.
+            val mid = extra * 0.5f
+            fun units(n: Float) = with(density) { (u * n).toSp() }
+            fun Modifier.at(x: Float, y: Float, w: Float, h: Float): Modifier =
+                this.offset(u * x, u * y).size(u * w, u * h)
 
-                Box(Modifier.size(u * GRID_W, u * GRID_H)) {
-                    Canvas(Modifier.fillMaxSize()) {
-                        drawWalkman(
-                            unit = u.toPx(),
-                            progress = progress,
-                            tapeTravel = tapeTravel,
-                            playing = isPlaying,
-                            volume = volumeLevel,
-                        )
-                    }
-                    // ---- Printing on the top panel ----
-                    Text(
-                        text = "STEREO CASSETTE PLAYER",
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = units(19f),
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = units(0.6f),
-                        maxLines = 1,
-                        modifier = Modifier.at(36f, 196f, 420f, 30f),
+            Box(Modifier.size(u * GRID_W, maxHeight)) {
+                Canvas(Modifier.fillMaxSize()) {
+                    drawWalkman(
+                        unit = u.toPx(),
+                        progress = progress,
+                        tapeTravel = tapeTravel,
+                        playing = isPlaying,
+                        volume = volumeLevel,
+                        extra = extra,
+                        mid = mid,
                     )
+                }
+                // ---- Printing on the top panel ----
+                Text(
+                    text = "STEREO CASSETTE PLAYER",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = units(19f),
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = units(0.6f),
+                    maxLines = 1,
+                    modifier = Modifier.at(36f, 196f, 420f, 30f),
+                )
+                Text(
+                    text = "HEADPHONES  A    B",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = units(11f),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    modifier = Modifier.at(312f, 104f, 170f, 30f),
+                )
+                // ---- The big outlined STEREO ----
+                Text(
+                    text = "STEREO",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = units(84f),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    style = TextStyle(drawStyle = DrawStroke(width = with(density) { (u * 2.4f).toPx() })),
+                    modifier = Modifier.at(62f, 300f, 420f, 110f),
+                )
+                // ---- The track, written on the cassette's label ----
+                Box(
+                    Modifier
+                        .at(WIN_X + WIN_W - 40f, WIN_Y + mid + 14f, 38f, WIN_H - 28f)
+                        .quarterTurn(),
+                ) {
                     Text(
-                        text = "HEADPHONES  A    B",
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = units(11f),
+                        text = song.title,
+                        color = InkColor,
+                        fontSize = units(27f),
+                        fontFamily = FontFamily.Cursive,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        modifier = Modifier.at(312f, 104f, 170f, 30f),
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = u * 10),
                     )
-                    // ---- The big outlined STEREO ----
+                }
+                Box(
+                    Modifier
+                        .at(WIN_X + 4f, WIN_Y + mid + 14f, 36f, WIN_H - 28f)
+                        .quarterTurn(),
+                ) {
                     Text(
-                        text = "STEREO",
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = units(84f),
-                        fontWeight = FontWeight.Bold,
+                        text = song.artist,
+                        color = InkColor.copy(alpha = 0.85f),
+                        fontSize = units(22f),
+                        fontFamily = FontFamily.Cursive,
                         maxLines = 1,
-                        style = TextStyle(drawStyle = DrawStroke(width = with(density) { (u * 2.4f).toPx() })),
-                        modifier = Modifier.at(62f, 300f, 420f, 110f),
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = u * 10),
                     )
-                    // ---- The track, written on the cassette's label ----
-                    // The cassette lies on its side, so the label reads
-                    // bottom to top.
-                    Box(
-                        Modifier
-                            .at(WIN_X + WIN_W - 40f, WIN_Y + 14f, 38f, WIN_H - 28f)
-                            .quarterTurn(),
-                    ) {
-                        Text(
-                            text = song.title,
-                            color = InkColor,
-                            fontSize = units(27f),
-                            fontFamily = FontFamily.Cursive,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = u * 10),
-                        )
-                    }
-                    Box(
-                        Modifier
-                            .at(WIN_X + 4f, WIN_Y + 14f, 36f, WIN_H - 28f)
-                            .quarterTurn(),
-                    ) {
-                        Text(
-                            text = song.artist,
-                            color = InkColor.copy(alpha = 0.85f),
-                            fontSize = units(22f),
-                            fontFamily = FontFamily.Cursive,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = u * 10),
-                        )
-                    }
-                    // ---- Engraving on the silver panel ----
+                }
+                // ---- Engraving on the silver panel ----
+                Text(
+                    text = "STOP\nEJECT",
+                    color = Engraving,
+                    fontSize = units(11f),
+                    lineHeight = units(12f),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.at(486f, 492f, 60f, 32f),
+                )
+                Box(
+                    Modifier
+                        .at(510f, 790f + mid, 22f, 110f)
+                        .quarterTurn(),
+                ) {
                     Text(
-                        text = "STOP\nEJECT",
+                        text = "VOLUME",
                         color = Engraving,
                         fontSize = units(11f),
-                        lineHeight = units(12f),
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.at(486f, 492f, 60f, 32f),
+                        letterSpacing = units(1f),
+                        maxLines = 1,
                     )
-                    Box(
-                        Modifier
-                            .at(510f, 790f, 22f, 110f)
-                            .quarterTurn(),
-                    ) {
-                        Text(
-                            text = "VOLUME",
-                            color = Engraving,
-                            fontSize = units(11f),
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = units(1f),
-                            maxLines = 1,
-                        )
-                    }
                 }
             }
         }
     }
-}
-
-/** The time and date above the player, as a lock screen has them. */
-@Composable
-private fun Clock() {
-    val context = LocalContext.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(60_000L - System.currentTimeMillis() % 60_000L)
-            now = System.currentTimeMillis()
-        }
-    }
-    val locale = Locale.getDefault()
-    val time = remember(now) {
-        SimpleDateFormat(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", locale).format(Date(now))
-    }
-    val date = remember(now) {
-        SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEMMMMd"), locale).format(Date(now))
-    }
-    Text(
-        text = date,
-        color = Color.White.copy(alpha = 0.55f),
-        fontSize = 15.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Text(
-        text = time,
-        color = Color.White.copy(alpha = 0.6f),
-        fontSize = 56.sp,
-        lineHeight = 60.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
 }
 
 /** Lays the content out along its box's length and turns it to read bottom to top. */
@@ -297,6 +256,8 @@ private fun DrawScope.drawWalkman(
     tapeTravel: Float,
     playing: Boolean,
     volume: Float,
+    extra: Float,
+    mid: Float,
 ) {
     fun o(x: Float, y: Float) = Offset(x * unit, y * unit)
     fun sz(w: Float, h: Float) = Size(w * unit, h * unit)
@@ -314,9 +275,9 @@ private fun DrawScope.drawWalkman(
         Brush.linearGradient(
             listOf(BlueTop, Color(0xFF28478C), BlueBottom),
             start = o(0f, 60f),
-            end = o(GRID_W, GRID_H),
+            end = o(GRID_W, GRID_H + extra),
         ),
-        o(0f, 60f), sz(GRID_W, GRID_H - 60f), r(24f),
+        o(0f, 60f), sz(GRID_W, GRID_H + extra - 60f), r(24f),
     )
     // Top panel: a touch lighter, and its seam.
     drawRoundRect(
@@ -333,38 +294,39 @@ private fun DrawScope.drawWalkman(
     }
 
     // ---- Cassette window ----
-    val win = RoundRect(WIN_X * unit, WIN_Y * unit, (WIN_X + WIN_W) * unit, (WIN_Y + WIN_H) * unit, r(12f))
-    drawRoundRect(Color(0xFF0A0E19), o(WIN_X - 8f, WIN_Y - 8f), sz(WIN_W + 16f, WIN_H + 16f), r(16f))
+    val wy = WIN_Y + mid
+    val win = RoundRect(WIN_X * unit, wy * unit, (WIN_X + WIN_W) * unit, (wy + WIN_H) * unit, r(12f))
+    drawRoundRect(Color(0xFF0A0E19), o(WIN_X - 8f, wy - 8f), sz(WIN_W + 16f, WIN_H + 16f), r(16f))
     clipPath(Path().apply { addRoundRect(win) }) {
-        drawCassetteOnSide(unit, progress, tapeTravel)
+        drawCassetteOnSide(unit, progress, tapeTravel, shift = mid)
         // The smoked pane over it.
-        drawRect(Color(0xFF0D1A3A).copy(alpha = 0.28f), o(WIN_X, WIN_Y), sz(WIN_W, WIN_H))
+        drawRect(Color(0xFF0D1A3A).copy(alpha = 0.28f), o(WIN_X, wy), sz(WIN_W, WIN_H))
         drawRect(
             Brush.linearGradient(
                 0f to Color.White.copy(alpha = 0.14f),
                 0.3f to Color.White.copy(alpha = 0.03f),
                 0.31f to Color.Transparent,
-                start = o(WIN_X, WIN_Y),
-                end = o(WIN_X + WIN_W, WIN_Y + WIN_H),
+                start = o(WIN_X, wy),
+                end = o(WIN_X + WIN_W, wy + WIN_H),
             ),
-            o(WIN_X, WIN_Y), sz(WIN_W, WIN_H),
+            o(WIN_X, wy), sz(WIN_W, WIN_H),
         )
     }
 
     // ---- The arrow, the way the tape runs ----
     val arrow = Path().apply {
-        moveTo(355f * unit, 905f * unit)
-        lineTo(355f * unit, 820f * unit)
-        lineTo(332f * unit, 820f * unit)
-        lineTo(370f * unit, 760f * unit)
-        lineTo(408f * unit, 820f * unit)
-        lineTo(385f * unit, 820f * unit)
-        lineTo(385f * unit, 905f * unit)
+        moveTo(355f * unit, (905f + mid) * unit)
+        lineTo(355f * unit, (820f + mid) * unit)
+        lineTo(332f * unit, (820f + mid) * unit)
+        lineTo(370f * unit, (760f + mid) * unit)
+        lineTo(408f * unit, (820f + mid) * unit)
+        lineTo(385f * unit, (820f + mid) * unit)
+        lineTo(385f * unit, (905f + mid) * unit)
         close()
     }
     drawPath(arrow, Color.White.copy(alpha = 0.88f), style = Stroke(2.4f * unit, join = StrokeJoin.Miter))
     // A screw in the blue.
-    drawCircle(Color(0xFF0E1630), 7f * unit, o(445f, 1000f))
+    drawCircle(Color(0xFF0E1630), 7f * unit, o(445f, 1000f + mid))
 
     // ---- Silver side panel ----
     drawRoundRect(
@@ -373,14 +335,14 @@ private fun DrawScope.drawWalkman(
             startX = SILVER_X * unit,
             endX = GRID_W * unit,
         ),
-        o(SILVER_X, 150f), sz(GRID_W - SILVER_X, GRID_H - 150f), r(20f),
+        o(SILVER_X, 150f), sz(GRID_W - SILVER_X, GRID_H + extra - 150f), r(20f),
     )
     // Square off its left edge where it meets the blue.
-    drawRect(Color(0xFFC9CDD3), o(SILVER_X, 150f), sz(20f, GRID_H - 150f))
-    drawLine(Color.Black.copy(alpha = 0.3f), o(SILVER_X, 150f), o(SILVER_X, GRID_H), 1.5f * unit)
+    drawRect(Color(0xFFC9CDD3), o(SILVER_X, 150f), sz(20f, GRID_H + extra - 150f))
+    drawLine(Color.Black.copy(alpha = 0.3f), o(SILVER_X, 150f), o(SILVER_X, GRID_H + extra), 1.5f * unit)
     // Brushed grain.
     var y = 152f
-    while (y < GRID_H - 4f) {
+    while (y < GRID_H + extra - 4f) {
         drawLine(Color.White.copy(alpha = 0.07f), o(SILVER_X + 2f, y), o(GRID_W - 4f, y), 1f)
         y += 3f
     }
@@ -406,7 +368,7 @@ private fun DrawScope.drawWalkman(
 
     // ---- Volume slide ----
     val slotTop = 560f
-    val slotH = 330f
+    val slotH = 330f + extra
     drawRoundRect(Color(0xFF7D838B), o(548f, slotTop), sz(30f, slotH), r(5f))
     drawRoundRect(Color(0xFF4D5259), o(556f, slotTop + 6f), sz(14f, slotH - 12f), r(4f))
     for (i in 0..10) {
@@ -424,8 +386,8 @@ private fun DrawScope.drawWalkman(
         ry += 5f
     }
     // Tone hole near the foot.
-    drawCircle(Color(0xFF3E434A), 11f * unit, o(560f, 960f))
-    drawCircle(Color(0xFF15171A), 7f * unit, o(560f, 960f))
+    drawCircle(Color(0xFF3E434A), 11f * unit, o(560f, 960f + extra))
+    drawCircle(Color(0xFF15171A), 7f * unit, o(560f, 960f + extra))
 }
 
 /** A ribbed key on the silver panel; pushed in, it sits back and darker. */
@@ -452,17 +414,18 @@ private fun DrawScope.drawSideKey(unit: Float, x: Float, y: Float, w: Float, h: 
  * The cassette behind the window, lying on its side: label paper round the
  * two hubs, the clear tape window between them, and the packs of tape.
  */
-private fun DrawScope.drawCassetteOnSide(unit: Float, progress: Float, tapeTravel: Float) {
+private fun DrawScope.drawCassetteOnSide(unit: Float, progress: Float, tapeTravel: Float, shift: Float) {
+    val wy = WIN_Y + shift
     val cx = (WIN_X + WIN_W / 2) * unit
-    drawRect(LabelPaper, Offset(WIN_X * unit, WIN_Y * unit), Size(WIN_W * unit, WIN_H * unit))
+    drawRect(LabelPaper, Offset(WIN_X * unit, wy * unit), Size(WIN_W * unit, WIN_H * unit))
     // The coloured band across the label.
-    drawRect(Color(0xFFE8622A), Offset((WIN_X + WIN_W - 44f) * unit, WIN_Y * unit), Size(4f * unit, WIN_H * unit))
+    drawRect(Color(0xFFE8622A), Offset((WIN_X + WIN_W - 44f) * unit, wy * unit), Size(4f * unit, WIN_H * unit))
 
     val hub = 22f * unit
     // Kept clear of the strips either side, where the label's written on.
     val full = 56f * unit
-    val topC = Offset(cx, (WIN_Y + 105f) * unit)
-    val bottomC = Offset(cx, (WIN_Y + WIN_H - 105f) * unit)
+    val topC = Offset(cx, (wy + 105f) * unit)
+    val bottomC = Offset(cx, (wy + WIN_H - 105f) * unit)
     // Tape runs bottom to top, as the arrow says.
     val bottomPack = hub + (full - hub) * (1f - progress)
     val topPack = hub + (full - hub) * progress

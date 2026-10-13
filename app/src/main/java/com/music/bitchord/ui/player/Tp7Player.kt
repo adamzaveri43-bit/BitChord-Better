@@ -12,16 +12,13 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -215,20 +212,30 @@ fun Tp7Player(
     ) {
         BoxWithConstraints(
             Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 6.dp, vertical = 10.dp),
+                .fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            val u: Dp = minOf(maxWidth / GRID_W, maxHeight / GRID_H)
+            // Drawn to the width of the screen, so the device runs edge to edge.
+            val u: Dp = maxWidth / GRID_W
             // A phone is taller than the device. Rather than leave the spare
             // height empty, the lower half — keys, fader and the body round
             // them — grows into it, up to a point; the disc and everything
             // above keep their proportions.
-            val extra = (maxHeight / u - GRID_H).coerceIn(0f, MAX_EXTRA)
-            val bodyH = BODY_H + extra
-            val keyH = KEY_H + extra
-            val faderTravel = FADER_TRAVEL + extra
+            val extra = (maxHeight / u - GRID_H).coerceAtLeast(0f)
+            // The height the width leaves over goes two ways: most into the
+            // keys and the fader, which take it as length, and the rest as room
+            // above them, so the disc and what sits on it come down a little
+            // and the keys aren't stretched past their proportions.
+            // Split three ways: a little into the room above the disc, the
+            // most into the room above the keys, and the rest into the keys
+            // themselves. The body ends where the keys do, and the knob hangs
+            // off its bottom edge as it does on the device.
+            val hs = extra * 0.25f
+            val ds = extra * 0.45f
+            val keyGrow = extra * 0.30f
+            val bodyH = BODY_H + ds + keyGrow
+            val keyH = KEY_H + keyGrow
+            val faderTravel = FADER_TRAVEL + keyGrow
             fun Modifier.at(x: Float, y: Float, w: Float, h: Float): Modifier =
                 this.offset(u * (x + OX), u * (y + OY)).size(u * w, u * h)
             fun units(n: Float) = with(density) { (u * n).toSp() }
@@ -243,7 +250,7 @@ fun Tp7Player(
                 )
                 Box(
                     Modifier
-                        .at(-10f, KEY_TOP + 24f, 14f, 100f + extra * 0.5f)
+                        .at(-10f, KEY_TOP + ds + 24f, 14f, 100f + keyGrow * 0.5f)
                         .clip(RoundedCornerShape(u * 4))
                         .background(Brush.horizontalGradient(listOf(Color(0xFFB4B7BB), Color(0xFFD6D7D9)))),
                 )
@@ -252,11 +259,11 @@ fun Tp7Player(
                 Canvas(Modifier.at(0f, 0f, BODY_W, bodyH)) { drawBody() }
 
                 // ---- LEDs ----
-                Canvas(Modifier.at(150f, 30f, 20f, 20f)) {
+                Canvas(Modifier.at(150f, 30f + hs, 20f, 20f)) {
                     if (isPlaying) drawCircle(Color(0x66FF6A1A), size.minDimension / 2)
                     drawCircle(if (isPlaying) Color(0xFFFF6A1A) else Color(0xFF26272A), size.minDimension * 0.18f)
                 }
-                Canvas(Modifier.at(225f, 30f, 20f, 20f)) {
+                Canvas(Modifier.at(225f, 30f + hs, 20f, 20f)) {
                     drawCircle(Color(0xFF9EA1A5), size.minDimension * 0.17f)
                 }
 
@@ -266,7 +273,7 @@ fun Tp7Player(
                     color = Color(0xFF3E4146),
                     fontSize = units(30f),
                     fontWeight = FontWeight.Light,
-                    modifier = Modifier.at(26f, 20f, 120f, 44f),
+                    modifier = Modifier.at(26f, 20f + hs, 120f, 44f),
                 )
 
                 // ---- OLED ----
@@ -278,12 +285,12 @@ fun Tp7Player(
                     units = ::units,
                     unit = u,
                     modifier = Modifier
-                        .at(348f, 18f, 108f, 60f),
+                        .at(348f, 18f + hs, 108f, 60f),
                 )
 
                 // ---- The disc ----
                 val discCx = 235f
-                val discCy = 278f
+                val discCy = 278f + ds
                 val discR = 215f
                 // Rotating layer: face line, printing and the hub.
                 Box(
@@ -372,14 +379,14 @@ fun Tp7Player(
 
                 // ---- Lever ----
                 var leverTilt by remember { mutableIntStateOf(0) }
-                Canvas(Modifier.at(-OX, 90f, 62f, 370f)) {
+                Canvas(Modifier.at(-OX, 90f + ds, 62f, 370f)) {
                     drawLever(tilt = leverTilt, unit = u.toPx())
                 }
-                Text("▲▲", color = Color(0xFF6C6F74), fontSize = units(13f), modifier = Modifier.at(10f, 125f, 30f, 20f))
-                Text("▼\nR", color = Color(0xFF6C6F74), fontSize = units(13f), lineHeight = units(15f), modifier = Modifier.at(13f, 395f, 30f, 40f))
+                Text("▲▲", color = Color(0xFF6C6F74), fontSize = units(13f), modifier = Modifier.at(10f, 125f + ds, 30f, 20f))
+                Text("▼\nR", color = Color(0xFF6C6F74), fontSize = units(13f), lineHeight = units(15f), modifier = Modifier.at(13f, 395f + ds, 30f, 40f))
                 // Upper half pushes it forward, lower half back.
                 PressArea(
-                    modifier = Modifier.at(-OX, 90f, 62f, 185f),
+                    modifier = Modifier.at(-OX, 90f + ds, 62f, 185f),
                     onPressChange = { leverTilt = if (it) -1 else 0 },
                     onTap = onNext,
                     onHoldStart = { cueDirection = 1 },
@@ -390,7 +397,7 @@ fun Tp7Player(
                     },
                 )
                 PressArea(
-                    modifier = Modifier.at(-OX, 275f, 62f, 185f),
+                    modifier = Modifier.at(-OX, 275f + ds, 62f, 185f),
                     onPressChange = { leverTilt = if (it) 1 else 0 },
                     onTap = onPrevious,
                     onHoldStart = { cueDirection = -1 },
@@ -405,7 +412,7 @@ fun Tp7Player(
                 var mDown by remember { mutableStateOf(false) }
                 Box(
                     Modifier
-                        .at(442f, 131f, 19f, 19f)
+                        .at(442f, 131f + hs, 19f, 19f)
                         .graphicsLayer { scaleX = if (mDown) 0.9f else 1f; scaleY = scaleX }
                         .clip(RoundedCornerShape(u * 2))
                         .background(Color(0xFFF26B21)),
@@ -414,7 +421,7 @@ fun Tp7Player(
                     Text("M", color = Color.White, fontSize = units(13f), fontWeight = FontWeight.Medium, style = TightText)
                 }
                 PressArea(
-                    modifier = Modifier.at(424f, 114f, 38f, 54f),
+                    modifier = Modifier.at(424f, 114f + hs, 38f, 54f),
                     onPressChange = { mDown = it },
                     onTap = onOpenSongMenu,
                 )
@@ -440,7 +447,7 @@ fun Tp7Player(
 
                 // ---- Grey button ----
                 var greyDown by remember { mutableStateOf(false) }
-                Canvas(Modifier.at(38f, 450f, 36f, 36f)) {
+                Canvas(Modifier.at(38f, 450f + ds, 36f, 36f)) {
                     drawCircle(
                         Brush.verticalGradient(
                             if (greyDown) listOf(Color(0xFF8E9195), Color(0xFFA6A9AD)) else listOf(Color(0xFFA9ACB0), Color(0xFF909397)),
@@ -449,26 +456,26 @@ fun Tp7Player(
                     )
                 }
                 PressArea(
-                    modifier = Modifier.at(28f, 440f, 56f, 56f),
+                    modifier = Modifier.at(28f, 440f + ds, 56f, 56f),
                     onPressChange = { greyDown = it },
                     onTap = onClose,
                 )
 
                 // ---- + / − ----
-                Canvas(Modifier.at(360f, 405f, 110f, 110f)) { drawVolumePill() }
+                Canvas(Modifier.at(360f, 405f + ds, 110f, 110f)) { drawVolumePill() }
                 VolumeButton(
                     plus = true,
-                    modifier = Modifier.at(415f, 416f, 40f, 40f),
+                    modifier = Modifier.at(415f, 416f + ds, 40f, 40f),
                     onStep = { setVolume(volumeLevel + VOLUME_STEP) },
                 )
                 VolumeButton(
                     plus = false,
-                    modifier = Modifier.at(370f, 458f, 40f, 40f),
+                    modifier = Modifier.at(370f, 458f + ds, 40f, 40f),
                     onStep = { setVolume(volumeLevel - VOLUME_STEP) },
                 )
 
                 // ---- Keys ----
-                val keyTop = KEY_TOP
+                val keyTop = KEY_TOP + ds
                 Key(
                     modifier = Modifier.at(0f, keyTop, 112f, keyH),
                     // The record key sits in the body's rounded corner.
@@ -507,12 +514,12 @@ fun Tp7Player(
                 }
 
                 // ---- Fader ----
-                Canvas(Modifier.at(360f, 510f, 110f, 160f + extra)) {
-                    drawFader(level = volumeLevel, unit = u.toPx(), travel = faderTravel)
+                Canvas(Modifier.at(360f, 510f + ds, 110f, 160f + keyGrow)) {
+                    drawFader(level = volumeLevel, unit = u.toPx(), travel = faderTravel, shift = ds)
                 }
                 Box(
                     Modifier
-                        .at(360f, 505f, 110f, 170f + extra)
+                        .at(360f, 505f + ds, 110f, 170f + keyGrow)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
@@ -920,27 +927,27 @@ private fun DrawScope.drawVolumePill() {
     }
 }
 
-private fun DrawScope.drawFader(level: Float, unit: Float, travel: Float) {
+private fun DrawScope.drawFader(level: Float, unit: Float, travel: Float, shift: Float) {
     val ox = 360f
-    val oy = 510f
+    val oy = 510f + shift
     fun x(v: Float) = (v - ox) * unit
     fun y(v: Float) = (v - oy) * unit
     for (slot in listOf(397f, 427f)) {
         drawRoundRect(
             Color(0xFF8A8D91),
-            topLeft = Offset(x(slot) - 3f * unit, y(FADER_TOP) - 4f * unit),
+            topLeft = Offset(x(slot) - 3f * unit, y((FADER_TOP + shift)) - 4f * unit),
             size = Size(6f * unit, travel * unit + 8f * unit),
             cornerRadius = CornerRadius(3f * unit),
         )
         drawRoundRect(
             Color(0xFF5E6165),
-            topLeft = Offset(x(slot) - 1f * unit, y(FADER_TOP) - 2f * unit),
+            topLeft = Offset(x(slot) - 1f * unit, y((FADER_TOP + shift)) - 2f * unit),
             size = Size(2f * unit, travel * unit + 4f * unit),
             cornerRadius = CornerRadius(1f * unit),
         )
     }
     // The cap: a crosshair across both slots, at the level.
-    val capY = y(FADER_TOP) + (1f - level.coerceIn(0f, 1f)) * travel * unit
+    val capY = y((FADER_TOP + shift)) + (1f - level.coerceIn(0f, 1f)) * travel * unit
     drawLine(Color(0xFF55585D), Offset(x(372f), capY), Offset(x(452f), capY), 1.6f * unit)
     for (slot in listOf(397f, 427f)) {
         drawRoundRect(
@@ -999,7 +1006,6 @@ private const val BODY_CORNER = 18.8f
 private const val KEY_TOP = 516f
 private const val KEY_H = 164f
 /** How much taller the lower half may grow into a tall screen. */
-private const val MAX_EXTRA = 100f
 private const val HUB_R = 43f
 private const val FADER_TOP = 520f
 private const val FADER_TRAVEL = 132f
