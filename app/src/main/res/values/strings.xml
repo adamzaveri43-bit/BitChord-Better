@@ -337,6 +337,14 @@
     <string name="player_style">Player style</string>
     <string name="player_style_modern">Modern</string>
     <string name="player_style_ipod">iPod</string>
+    <string name="player_style_walkman">Walkman</string>
+    <string name="walkman_face_title">STEREO CASSETTE PLAYER</string>
+    <string name="walkman_face_subtitle">METAL · CrO₂ · NORMAL</string>
+    <string name="walkman_volume">VOLUME</string>
+    <string name="walkman_stop_eject">STOP/EJECT</string>
+    <string name="walkman_rew">REW</string>
+    <string name="walkman_play">PLAY</string>
+    <string name="walkman_ff">FF</string>
     <string name="ipod_now_playing">Now Playing</string>
     <string name="ipod_menu">MENU</string>
     <string name="ipod_track_of">%1$d of %2$d</string>

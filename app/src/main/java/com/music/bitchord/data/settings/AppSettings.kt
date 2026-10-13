@@ -121,6 +121,9 @@ enum class PlayerStyle {
 
     /** A click-wheel iPod: a small LCD over the wheel. */
     IPOD,
+
+    /** A portable cassette player: the tape, its reels, and mechanical keys. */
+    WALKMAN,
 }
 
 /** Stable persisted ordering for each on-device music library. */

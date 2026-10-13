@@ -1298,7 +1298,7 @@ fun SettingsScreen(
                 )
             }
             val playerStyleTitle = stringResource(R.string.player_style)
-            row(playerStyleTitle, "player", "ipod", "click wheel", "classic") {
+            row(playerStyleTitle, "player", "ipod", "click wheel", "classic", "walkman", "cassette", "tape") {
                 SettingsRow(
                     icon = Icons.Rounded.PlayCircle,
                     title = playerStyleTitle,
@@ -1307,6 +1307,7 @@ fun SettingsScreen(
                     options = listOf(
                         stringResource(R.string.player_style_modern),
                         stringResource(R.string.player_style_ipod),
+                        stringResource(R.string.player_style_walkman),
                     ),
                     selectedIndex = PlayerStyle.entries.indexOf(playerStyle),
                     onSelect = { AppSettings.setPlayerStyle(PlayerStyle.entries[it]) },
