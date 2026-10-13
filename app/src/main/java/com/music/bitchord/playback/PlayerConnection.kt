@@ -764,10 +764,12 @@ fun mediaIdIn(uri: Uri): String? = if (uri.authority == "source") {
  */
 suspend fun MediaController.playSongs(songs: List<Song>, startIndex: Int) {
     if (songs.isEmpty()) return
-    // A queue started while shuffle is on goes in shuffled rather than being
-    // played out of order — see [QueueShuffle]. The track the user picked still
-    // leads, so it ends up at the top instead of at [startIndex].
-    val shuffled = QueueShuffle.enabled.value
+    // A queue started from a Shuffle action goes in shuffled; anything else —
+    // a song picked from an album or a playlist — plays in order, and turns a
+    // shuffle left on from before off. See [QueueShuffle.takeForNewQueue].
+    // Shuffled, the track the user picked still leads, so it ends up at the
+    // top instead of at [startIndex].
+    val shuffled = QueueShuffle.takeForNewQueue()
     val items = withContext(Dispatchers.Default) {
         val queue = if (shuffled) {
             QueueShuffle.startingOrder(songs, startIndex.coerceIn(songs.indices))

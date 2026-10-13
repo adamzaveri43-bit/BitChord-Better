@@ -61,7 +61,36 @@ object QueueShuffle {
     fun enableForNextQueue() {
         original = emptyList()
         _enabled.value = true
+        armedForNextQueue = true
         AppSettings.setShuffleEnabled(true)
+    }
+
+    /** Set by [enableForNextQueue]: the next new queue was asked for shuffled. */
+    @Volatile
+    private var armedForNextQueue = false
+
+    /**
+     * Whether a queue being started now goes in shuffled — and settles the
+     * shuffle state to match.
+     *
+     * Only a queue started from a Shuffle action is. Picking a song from an
+     * album or a playlist plays it and what follows in order, as it does in
+     * Apple Music, and switches shuffle off: left on from an earlier Shuffle,
+     * it had every album played since come out in a random order, with
+     * nothing on the page to say why. Shuffle switched on in the player
+     * still shuffles the queue that's playing.
+     */
+    fun takeForNewQueue(): Boolean {
+        if (armedForNextQueue) {
+            armedForNextQueue = false
+            return true
+        }
+        if (_enabled.value) {
+            original = emptyList()
+            _enabled.value = false
+            AppSettings.setShuffleEnabled(false)
+        }
+        return false
     }
 
     /**
