@@ -73,6 +73,8 @@ import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import com.music.bitchord.data.settings.PlayerStyle
+import com.music.bitchord.data.settings.AppInterface
+import androidx.compose.material.icons.rounded.Album
 import com.music.bitchord.data.settings.IdleScreenMode
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.PlayCircle
@@ -239,6 +241,7 @@ fun SettingsScreen(
     val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
     val hideVolumeBar by AppSettings.hideVolumeBar.collectAsStateWithLifecycle()
     val playerStyle by AppSettings.playerStyle.collectAsStateWithLifecycle()
+    val appInterface by AppSettings.appInterface.collectAsStateWithLifecycle()
     val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
     val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
     val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
@@ -1299,6 +1302,23 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setStopOnTaskRemoved(!stopOnTaskRemoved) },
+                )
+            }
+            val appInterfaceTitle = stringResource(R.string.app_interface)
+            row(appInterfaceTitle, "ipod", "click wheel", "classic", "interface", "menu") {
+                SettingsRow(
+                    icon = Icons.Rounded.Album,
+                    title = appInterfaceTitle,
+                    subtitle = stringResource(R.string.app_interface_subtitle),
+                )
+                SegmentedControl(
+                    options = listOf(
+                        stringResource(R.string.app_interface_regular),
+                        stringResource(R.string.app_interface_ipod),
+                    ),
+                    selectedIndex = AppInterface.entries.indexOf(appInterface),
+                    onSelect = { AppSettings.setAppInterface(AppInterface.entries[it]) },
+                    modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
             }
             val playerStyleTitle = stringResource(R.string.player_style)

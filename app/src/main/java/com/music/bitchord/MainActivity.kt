@@ -266,6 +266,9 @@ import com.music.bitchord.ui.player.NowPlayingScreen
 import com.music.bitchord.ui.player.IpodPlayer
 import com.music.bitchord.ui.player.WalkmanPlayer
 import com.music.bitchord.ui.player.Tp7Player
+import com.music.bitchord.ui.player.IpodApp
+import com.music.bitchord.ui.player.IpodActions
+import com.music.bitchord.data.settings.AppInterface
 import com.music.bitchord.ui.player.IdleActivity
 import com.music.bitchord.ui.player.IdleFace
 import com.music.bitchord.ui.player.IdleScreenHost
@@ -523,6 +526,16 @@ private fun BitChordApp(
     // dock or the motion directly.
     val reducePlayerMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val playerStyle by AppSettings.playerStyle.collectAsStateWithLifecycle()
+    val appInterface by AppSettings.appInterface.collectAsStateWithLifecycle()
+    // In the iPod interface the player is a screen of its own, so a request
+    // for the sheet (a notification, a link) is passed to it instead.
+    var ipodNowPlayingRequests by remember { mutableStateOf(0) }
+    LaunchedEffect(appInterface, showNowPlaying) {
+        if (appInterface == AppInterface.IPOD && showNowPlaying) {
+            showNowPlaying = false
+            ipodNowPlayingRequests++
+        }
+    }
     val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
     val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
     val activeDock = playerDock.takeIf { !reducePlayerMotion }
@@ -5276,6 +5289,94 @@ private fun BitChordApp(
                     confirmJioSaavn = false
                 },
                 onDismiss = { confirmJioSaavn = false },
+            )
+        }
+
+        if (appInterface == AppInterface.IPOD) {
+            IpodApp(
+                home = homeState,
+                library = libraryState,
+                detail = detailStack.lastOrNull(),
+                results = results,
+                initialQuery = query,
+                song = playerSong,
+                isPlaying = player.isPlaying,
+                position = player.position,
+                durationMs = player.durationMs,
+                queueIndex = player.queueIndex,
+                queueSize = player.queue.size,
+                shuffleEnabled = shuffleEnabled,
+                repeatMode = player.repeatMode,
+                nowPlayingRequests = ipodNowPlayingRequests,
+                actions = IpodActions(
+                    playSongs = { songs, index, title, browseId ->
+                        playFrom(songs, index, QueueSource(title, PlaybackSourceType.BROWSE, browseId))
+                    },
+                    shuffleSongs = { songs, title, browseId ->
+                        if (songs.isNotEmpty()) {
+                            QueueShuffle.enableForNextQueue()
+                            playFrom(songs, songs.indices.random(), QueueSource(title, PlaybackSourceType.BROWSE, browseId))
+                        }
+                    },
+                    playShelfItem = { item, shelfTitle ->
+                        shelfSong(item)?.let { playRadio(it, QueueSource(shelfTitle, PlaybackSourceType.HOME)) }
+                    },
+                    // Spotify's page is a screen of the regular interface only.
+                    openShelfItem = { item ->
+                        if (item.browseId == SPOTIFY_BROWSE_ID) {
+                            false
+                        } else {
+                            onLibraryItemClick(item)
+                            true
+                        }
+                    },
+                    openBrowse = { item ->
+                        viewModel.openDetail(item.browseId, item.title, item.subtitle, item.thumbnailUrl, item.type)
+                    },
+                    closeDetail = { viewModel.closeDetail() },
+                    playSearchSong = { song -> playRadio(song, QueueSource(searchLabel, PlaybackSourceType.SEARCH)) },
+                    search = { q ->
+                        if (searchSource == SearchSource.LIBRARY) viewModel.setSearchSource(SearchSource.YOUTUBE)
+                        viewModel.onQueryChange(q)
+                        viewModel.submitSearch()
+                    },
+                    loadLibrary = { viewModel.loadLibrary() },
+                    loadHome = { viewModel.loadHome() },
+                    playPause = { togglePlayPause() },
+                    next = { controller?.seekToNextMediaItem() },
+                    previous = { controller?.seekToPrevious() },
+                    seek = { target ->
+                        controller?.let { c ->
+                            val duration = c.duration
+                            if (duration > 0) {
+                                c.seekTo(target.coerceIn(0L, (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)))
+                            }
+                        }
+                    },
+                    toggleShuffle = { controller?.toggleShuffle() },
+                    cycleRepeat = {
+                        controller?.let {
+                            val next = when (it.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                            AppSettings.setRepeatMode(next)
+                            it.repeatMode = next
+                        }
+                    },
+                    openSongMenu = { song ->
+                        menuFromPlayer = song.videoId == playerSong?.videoId
+                        songMenuOrigin = null
+                        songActions = song
+                    },
+                    exit = { AppSettings.setAppInterface(AppInterface.REGULAR) },
+                    openSettings = {
+                        AppSettings.setAppInterface(AppInterface.REGULAR)
+                        showSettings = true
+                    },
+                ),
+                modifier = Modifier.fillMaxSize(),
             )
         }
 

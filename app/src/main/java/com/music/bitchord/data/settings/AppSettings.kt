@@ -114,6 +114,14 @@ enum class EqualizerMode {
     MANUAL,
 }
 
+/** Which interface the whole app runs as. */
+enum class AppInterface {
+    REGULAR,
+
+    /** Menus and a click wheel, as a classic iPod. */
+    IPOD,
+}
+
 /** How the full-screen player is drawn. */
 enum class PlayerStyle {
     /** The artwork-led player. */
@@ -402,6 +410,9 @@ object AppSettings {
 
     /** How long without a touch before [idleScreenMode]'s face comes up. */
     val idleScreenDelaySeconds = MutableStateFlow(DEFAULT_IDLE_SCREEN_DELAY)
+
+    /** Which interface the whole app runs as. */
+    val appInterface = MutableStateFlow(AppInterface.REGULAR)
 
     /** Which face the full-screen player wears. */
     val playerStyle = MutableStateFlow(PlayerStyle.MODERN)
@@ -871,6 +882,9 @@ object AppSettings {
         }.getOrDefault(IdleScreenMode.OFF)
         idleScreenDelaySeconds.value = prefs.getInt(KEY_IDLE_SCREEN_DELAY, DEFAULT_IDLE_SCREEN_DELAY)
             .takeIf { it in IDLE_SCREEN_DELAYS } ?: DEFAULT_IDLE_SCREEN_DELAY
+        appInterface.value = runCatching {
+            AppInterface.valueOf(prefs.getString(KEY_APP_INTERFACE, null) ?: AppInterface.REGULAR.name)
+        }.getOrDefault(AppInterface.REGULAR)
         playerStyle.value = runCatching {
             PlayerStyle.valueOf(prefs.getString(KEY_PLAYER_STYLE, null) ?: PlayerStyle.MODERN.name)
         }.getOrDefault(PlayerStyle.MODERN)
@@ -1244,6 +1258,11 @@ object AppSettings {
     fun setIdleScreenDelaySeconds(value: Int) {
         idleScreenDelaySeconds.value = value
         prefs.edit().putInt(KEY_IDLE_SCREEN_DELAY, value).apply()
+    }
+
+    fun setAppInterface(value: AppInterface) {
+        appInterface.value = value
+        prefs.edit().putString(KEY_APP_INTERFACE, value.name).apply()
     }
 
     fun setPlayerStyle(value: PlayerStyle) {
@@ -2015,6 +2034,7 @@ object AppSettings {
     private const val KEY_STOP_ON_TASK_REMOVED = "stop_on_task_removed"
     private const val KEY_HIDE_VOLUME_BAR = "hide_volume_bar"
     private const val KEY_PLAYER_STYLE = "player_style"
+    private const val KEY_APP_INTERFACE = "app_interface"
     private const val KEY_IDLE_SCREEN_MODE = "idle_screen_mode"
     private const val KEY_IDLE_SCREEN_DELAY = "idle_screen_delay"
 

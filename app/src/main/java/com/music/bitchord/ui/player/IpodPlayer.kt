@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -104,8 +105,7 @@ fun IpodPlayer(
     onOpenSongMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val finish = if (dark) IpodFinish.Black else IpodFinish.White
+    val finish = rememberIpodFinish()
     val volume = remember { PlayerPlatform.host.volume }
     val volumeLevel by volume.level.collectAsState()
 
@@ -140,6 +140,84 @@ fun IpodPlayer(
         scrubTarget = -1L
     }
 
+    IpodBody(
+        finish = finish,
+        modifier = modifier,
+        lcd = { lcdModifier ->
+            IpodScreen(
+                song = song,
+                isPlaying = isPlaying,
+                position = position,
+                durationMs = durationMs,
+                queueIndex = queueIndex,
+                queueSize = queueSize,
+                mode = mode,
+                showVolume = showVolume && mode == WheelMode.Volume,
+                volumeLevel = volumeTarget ?: volumeLevel,
+                scrubTarget = scrubTarget,
+                modifier = lcdModifier,
+            )
+        },
+        wheel = { wheelModifier ->
+            ClickWheel(
+                finish = finish,
+                onMenu = onMenu,
+                onNext = onNext,
+                onPrevious = onPrevious,
+                onPlayPause = onPlayPause,
+                onCenter = {
+                    showVolume = false
+                    mode = if (mode == WheelMode.Volume && durationMs > 0) {
+                        WheelMode.Scrub
+                    } else {
+                        WheelMode.Volume
+                    }
+                    scrubTarget = -1L
+                    lastTurnAt = System.nanoTime()
+                },
+                onCenterHold = onOpenSongMenu,
+                onTurn = { steps ->
+                    lastTurnAt = System.nanoTime()
+                    when (mode) {
+                        WheelMode.Volume -> {
+                            volumeTurnAt = lastTurnAt
+                            val to = ((volumeTarget ?: volume.level.value) + steps * VOLUME_STEP).coerceIn(0f, 1f)
+                            volumeTarget = to
+                            volume.set(to)
+                        }
+                        WheelMode.Scrub -> if (durationMs > 0) {
+                            val from = scrubTarget.takeIf { it >= 0 } ?: position.positionMs
+                            val to = (from + steps * SCRUB_STEP_MS).coerceIn(0L, durationMs)
+                            scrubTarget = to
+                            onSeek(to)
+                        }
+                    }
+                },
+                modifier = wheelModifier,
+            )
+        },
+    )
+}
+
+/** The black or white finish, after the app's theme. */
+@Composable
+internal fun rememberIpodFinish(): IpodFinish {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return if (dark) IpodFinish.Black else IpodFinish.White
+}
+
+/**
+ * The iPod itself: the body, the LCD up top and the wheel below, laid out the
+ * same for every screen so that moving between the menus and Now Playing
+ * changes only what the LCD shows.
+ */
+@Composable
+internal fun IpodBody(
+    finish: IpodFinish,
+    lcd: @Composable (Modifier) -> Unit,
+    wheel: @Composable (Modifier) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier
             .fillMaxSize()
@@ -152,18 +230,8 @@ fun IpodPlayer(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            IpodScreen(
-                song = song,
-                isPlaying = isPlaying,
-                position = position,
-                durationMs = durationMs,
-                queueIndex = queueIndex,
-                queueSize = queueSize,
-                mode = mode,
-                showVolume = showVolume && mode == WheelMode.Volume,
-                volumeLevel = volumeTarget ?: volumeLevel,
-                scrubTarget = scrubTarget,
-                modifier = Modifier
+            lcd(
+                Modifier
                     .fillMaxWidth()
                     .aspectRatio(SCREEN_ASPECT),
             )
@@ -173,41 +241,8 @@ fun IpodPlayer(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                ClickWheel(
-                    finish = finish,
-                    onMenu = onMenu,
-                    onNext = onNext,
-                    onPrevious = onPrevious,
-                    onPlayPause = onPlayPause,
-                    onCenter = {
-                        showVolume = false
-                        mode = if (mode == WheelMode.Volume && durationMs > 0) {
-                            WheelMode.Scrub
-                        } else {
-                            WheelMode.Volume
-                        }
-                        scrubTarget = -1L
-                        lastTurnAt = System.nanoTime()
-                    },
-                    onCenterHold = onOpenSongMenu,
-                    onTurn = { steps ->
-                        lastTurnAt = System.nanoTime()
-                        when (mode) {
-                            WheelMode.Volume -> {
-                                volumeTurnAt = lastTurnAt
-                                val to = ((volumeTarget ?: volume.level.value) + steps * VOLUME_STEP).coerceIn(0f, 1f)
-                                volumeTarget = to
-                                volume.set(to)
-                            }
-                            WheelMode.Scrub -> if (durationMs > 0) {
-                                val from = scrubTarget.takeIf { it >= 0 } ?: position.positionMs
-                                val to = (from + steps * SCRUB_STEP_MS).coerceIn(0L, durationMs)
-                                scrubTarget = to
-                                onSeek(to)
-                            }
-                        }
-                    },
-                    modifier = Modifier
+                wheel(
+                    Modifier
                         .fillMaxHeight(0.92f)
                         .aspectRatio(1f, matchHeightConstraintsFirst = true),
                 )
@@ -216,9 +251,9 @@ fun IpodPlayer(
     }
 }
 
-private enum class WheelMode { Volume, Scrub }
+internal enum class WheelMode { Volume, Scrub }
 
-private class IpodFinish(
+internal class IpodFinish(
     val body: List<Color>,
     val wheel: List<Color>,
     val wheelEdge: Color,
@@ -248,8 +283,8 @@ private class IpodFinish(
 
 // ---- The LCD ----
 
-private val LcdText = Color(0xFF111111)
-private val LcdSubtext = Color(0xFF4A4D52)
+internal val LcdText = Color(0xFF111111)
+internal val LcdSubtext = Color(0xFF4A4D52)
 
 @Composable
 private fun IpodScreen(
@@ -265,16 +300,11 @@ private fun IpodScreen(
     scrubTarget: Long,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier
-            .shadow(6.dp, RoundedCornerShape(10.dp))
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.Black)
-            .padding(4.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFE9EDF2)))),
+    IpodLcd(
+        title = stringResource(R.string.ipod_now_playing),
+        isPlaying = isPlaying,
+        modifier = modifier,
     ) {
-        TitleBar(isPlaying)
         Column(
             Modifier
                 .weight(1f)
@@ -359,8 +389,33 @@ private fun IpodScreen(
     }
 }
 
+/**
+ * The LCD: the black bezel, the white screen, and the title bar across its
+ * top with the play state on the left and the battery on the right.
+ */
 @Composable
-private fun TitleBar(isPlaying: Boolean) {
+internal fun IpodLcd(
+    title: String,
+    isPlaying: Boolean?,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier
+            .shadow(6.dp, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.Black)
+            .padding(4.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFE9EDF2)))),
+    ) {
+        TitleBar(title, isPlaying)
+        content()
+    }
+}
+
+@Composable
+private fun TitleBar(title: String, isPlaying: Boolean?) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -377,14 +432,22 @@ private fun TitleBar(isPlaying: Boolean) {
                 .align(Alignment.CenterStart)
                 .size(10.dp),
         ) {
-            if (isPlaying) drawPlayGlyph(LcdText) else drawPauseGlyph(LcdText)
+            when (isPlaying) {
+                true -> drawPlayGlyph(LcdText)
+                false -> drawPauseGlyph(LcdText)
+                null -> Unit
+            }
         }
         Text(
-            text = stringResource(R.string.ipod_now_playing),
+            text = title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = LcdText,
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 30.dp),
         )
         Canvas(
             Modifier
@@ -495,7 +558,7 @@ private fun VolumeBar(level: Float) {
 // ---- The wheel ----
 
 @Composable
-private fun ClickWheel(
+internal fun ClickWheel(
     finish: IpodFinish,
     onMenu: () -> Unit,
     onNext: () -> Unit,
