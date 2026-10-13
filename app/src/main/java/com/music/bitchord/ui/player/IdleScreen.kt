@@ -1,6 +1,39 @@
 package com.music.bitchord.ui.player
 
 import android.os.Build
+import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
+import com.music.bitchord.R
+import com.music.bitchord.data.model.artworkAt
 import android.os.SystemClock
 import android.text.format.DateFormat
 import android.view.WindowManager
@@ -133,6 +166,8 @@ fun IdleScreenHost(
     onPlayPause: () -> Unit = {},
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
+    liked: Boolean = false,
+    onToggleLike: () -> Unit = {},
 ) {
     var shown by remember { mutableStateOf(false) }
     val last by IdleActivity.lastInteraction.collectAsState()
@@ -202,8 +237,8 @@ fun IdleScreenHost(
                 .background(Color.Black)
                 .graphicsLayer { alpha = fade.value }
                 .pointerInput(face) {
-                    if (face == IdleFace.WALKMAN) {
-                        // The Walkman's side keys work without waking: they
+                    if (face == IdleFace.WALKMAN || face == IdleFace.APPLE_MUSIC) {
+                        // These faces' keys work without waking: they
                         // take their own taps, and anything they don't take —
                         // a touch anywhere else — wakes the app as it lifts.
                         awaitEachGesture {
@@ -222,7 +257,17 @@ fun IdleScreenHost(
                 },
         ) {
             when (face) {
-                IdleFace.APPLE_MUSIC -> AppleMusicIdleFace(song, position, durationMs)
+                IdleFace.APPLE_MUSIC -> AppleMusicIdleFace(
+                    song = song,
+                    isPlaying = isPlaying,
+                    position = position,
+                    durationMs = durationMs,
+                    liked = liked,
+                    onToggleLike = onToggleLike,
+                    onPlayPause = onPlayPause,
+                    onNext = onNext,
+                    onPrevious = onPrevious,
+                )
                 IdleFace.TP7 -> {
                     Tp7Player(
                         song = song,
@@ -307,21 +352,31 @@ private fun Modifier.burnInDrift(): Modifier {
 }
 
 /**
- * The iPhone's always-on lock screen with music playing: the date and a big
- * clock up top, the artwork large and dimmed over a faint wash of its own
- * colours, and the track underneath.
+ * The iPhone's lock screen with music playing, as its always-on display shows
+ * it: the artwork large across the top, running down into a blurred wash of
+ * its own colours that fills the screen; the time and date small along the
+ * top; and the frosted Now Playing card low down with the track, its progress
+ * and its controls.
+ *
+ * The card's controls work as they do there — like, previous, play/pause and
+ * next — without waking the app; a touch anywhere else wakes it.
  */
 @Composable
 private fun AppleMusicIdleFace(
     song: Song,
+    isPlaying: Boolean,
     position: PlaybackPosition,
     durationMs: Long,
+    liked: Boolean,
+    onToggleLike: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
 ) {
     val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            // Wake on the minute rather than polling.
             delay(60_000L - System.currentTimeMillis() % 60_000L)
             now = System.currentTimeMillis()
         }
@@ -332,97 +387,194 @@ private fun AppleMusicIdleFace(
         SimpleDateFormat(pattern, locale).format(Date(now))
     }
     val date = remember(now) {
-        SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEMMMMd"), locale).format(Date(now))
+        SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEMMMd"), locale).format(Date(now))
     }
+    // As large as the screen is wide, for the art and the wash both.
+    val art = remember(song.thumbnailUrl) { song.artworkAt(1200) ?: song.thumbnailUrl }
+    val sf = SfPro
 
-    Box(Modifier.fillMaxSize()) {
-        // The artwork's colours, blurred to a wash. Blur needs Android 12;
-        // before that the wash is just a much dimmer copy.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val width = maxWidth
+        // The wash: the artwork blurred out to the edges. Blur needs Android
+        // 12; before that, a dim copy does the same job.
         AsyncImage(
-            model = song.thumbnailUrl,
+            model = art,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 0.35f else 0.12f }
-                .blur(80.dp),
+                .graphicsLayer { alpha = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 1f else 0.55f }
+                .blur(60.dp),
         )
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f)),
+                .background(Color.Black.copy(alpha = 0.12f)),
         )
+        // The artwork itself, square across the top, fading into the wash.
+        AsyncImage(
+            model = art,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .padding(top = width * 0.16f)
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        Brush.verticalGradient(
+                            0.62f to Color.Black,
+                            1f to Color.Transparent,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
+        )
+
         Column(
             Modifier
                 .fillMaxSize()
                 .burnInDrift()
-                .padding(horizontal = 36.dp, vertical = 56.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = date,
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = time,
-                color = Color.White.copy(alpha = 0.72f),
-                fontSize = 96.sp,
-                lineHeight = 100.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-2).sp,
-            )
-            Spacer(Modifier.weight(1f))
-            AsyncImage(
-                model = song.thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth(0.82f)
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .graphicsLayer { alpha = 0.6f },
-            )
-            Spacer(Modifier.height(22.dp))
-            Text(
-                text = song.title,
-                color = Color.White.copy(alpha = 0.72f),
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = song.artist,
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(14.dp))
-            val fraction = if (durationMs > 0) {
-                (position.positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            Canvas(
-                Modifier
-                    .fillMaxWidth(0.82f)
-                    .height(4.dp),
+            // ---- Time and date, small, along the top ----
+            Row(
+                Modifier.padding(top = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                val r = CornerRadius(size.height / 2)
-                drawRoundRect(Color.White.copy(alpha = 0.18f), cornerRadius = r)
-                drawRoundRect(
-                    Color.White.copy(alpha = 0.5f),
-                    size = Size(size.width * fraction, size.height),
-                    cornerRadius = r,
+                Text(
+                    text = time,
+                    color = Color.White,
+                    fontFamily = sf,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    style = AppleShadowText,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = date,
+                    color = Color.White,
+                    fontFamily = sf,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                    style = AppleShadowText,
                 )
             }
+            Spacer(Modifier.weight(1f))
+
+            // ---- The Now Playing card ----
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Color.White.copy(alpha = 0.20f))
+                    .border(0.6.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(26.dp))
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = song.title,
+                    color = Color.White,
+                    fontFamily = sf,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = song.artist,
+                    color = Color.White.copy(alpha = 0.72f),
+                    fontFamily = sf,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(10.dp))
+                val positionMs = position.positionMs
+                val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = clock(positionMs),
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontFamily = sf,
+                        fontSize = 11.sp,
+                        modifier = Modifier.width(40.dp),
+                    )
+                    Canvas(
+                        Modifier
+                            .weight(1f)
+                            .height(5.dp),
+                    ) {
+                        val r = CornerRadius(size.height / 2)
+                        drawRoundRect(Color.White.copy(alpha = 0.28f), cornerRadius = r)
+                        drawRoundRect(
+                            Color.White.copy(alpha = 0.85f),
+                            size = Size(size.width * fraction, size.height),
+                            cornerRadius = r,
+                        )
+                    }
+                    Text(
+                        text = if (durationMs > 0) "-" + clock(durationMs - positionMs) else "",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontFamily = sf,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.width(40.dp),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CardButton(if (liked) Icons.Rounded.Star else Icons.Rounded.StarBorder, 26.dp, onToggleLike)
+                    CardButton(Icons.Rounded.FastRewind, 34.dp, onPrevious)
+                    CardButton(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 42.dp, onPlayPause)
+                    CardButton(Icons.Rounded.FastForward, 34.dp, onNext)
+                    // Where AirPlay sits on the phone; kept as space so the
+                    // transport stays centred.
+                    Spacer(Modifier.size(44.dp))
+                }
+            }
+            Spacer(Modifier.height(36.dp))
         }
     }
+}
+
+/** A card control: a glyph with a generous touch target, taps its own. */
+@Composable
+private fun CardButton(icon: ImageVector, size: Dp, onTap: () -> Unit) {
+    val view = LocalView.current
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                onTap()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(size))
+    }
+}
+
+private val SfPro = FontFamily(
+    Font(R.font.sf_pro_display_regular, FontWeight.W400),
+    Font(R.font.sf_pro_display_semibold, FontWeight.W600),
+    Font(R.font.sf_pro_display_bold, FontWeight.W700),
+)
+
+private val AppleShadowText = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.25f), Offset(0f, 1f), 4f))
+
+private fun clock(ms: Long): String {
+    val total = (ms.coerceAtLeast(0L) / 1000).toInt()
+    return "%d:%02d".format(total / 60, total % 60)
 }
 
 /** Enough over-scan that a [DRIFT_DP] nudge can't uncover an edge. */

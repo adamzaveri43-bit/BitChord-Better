@@ -143,39 +143,58 @@ fun WalkmanFace(
                     .quarterTurn(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = song.title,
-                    color = Color(0xFF2A3140),
-                    fontSize = units(19f),
-                    fontFamily = FontFamily.Cursive,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
+                androidx.compose.foundation.layout.Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = song.title,
+                        color = Color(0xFF2A3140),
+                        fontSize = units(19f),
+                        fontFamily = FontFamily.Cursive,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = song.artist,
+                        color = Color(0xFF2A3140).copy(alpha = 0.75f),
+                        fontSize = units(15f),
+                        fontFamily = FontFamily.Cursive,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
 
             // ---- Silver lettering ----
             Text(
                 text = "SONY",
-                fontSize = units(56f),
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = units(4f),
+                fontSize = units(58f),
+                fontFamily = SonyFont,
+                fontWeight = FontWeight.Black,
+                letterSpacing = units(SONY_TRACKING),
                 maxLines = 1,
                 textAlign = TextAlign.Center,
                 style = TextStyle(brush = SilverText, shadow = LetterShadow),
-                modifier = Modifier.at(0f, g.sonyY, BLUE_W, 70f),
+                // Letter spacing trails the last letter too, so a centred word
+                // sits half a space left of centre; this puts it back.
+                modifier = Modifier
+                    .at(0f, g.sonyY, BLUE_W, 74f)
+                    .padding(start = u * SONY_TRACKING),
             )
             Text(
                 text = "WALKMAN",
-                fontSize = units(50f),
-                fontWeight = FontWeight.Black,
-                letterSpacing = units(1.5f),
+                fontSize = units(54f),
+                fontFamily = WalkmanFont,
+                letterSpacing = units(WALKMAN_TRACKING),
                 maxLines = 1,
                 textAlign = TextAlign.Center,
                 style = TextStyle(brush = SilverText, shadow = LetterShadow),
-                modifier = Modifier.at(0f, g.walkmanY, BLUE_W, 70f),
+                modifier = Modifier
+                    .at(0f, g.walkmanY, BLUE_W, 74f)
+                    .padding(start = u * WALKMAN_TRACKING),
             )
 
             // ---- Keys on the side bar ----
@@ -322,6 +341,27 @@ private val SilverText = Brush.verticalGradient(
     1f to Color(0xFFE2E5E9),
 )
 private val LetterShadow = Shadow(Color(0x66000000), Offset(0f, 2f), 3f)
+
+/**
+ * The wordmark's slab serif. Sony's is a reworked Clarendon; Besley is an open
+ * Clarendon revival, set at its heaviest.
+ */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private val SonyFont = FontFamily(
+    androidx.compose.ui.text.font.Font(
+        com.music.bitchord.R.font.besley_variable,
+        FontWeight.Black,
+        variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(
+            androidx.compose.ui.text.font.FontVariation.weight(900),
+        ),
+    ),
+)
+
+/** The logo's rounded, geometric capitals: the open Righteous comes closest. */
+private val WalkmanFont = FontFamily(androidx.compose.ui.text.font.Font(com.music.bitchord.R.font.righteous))
+
+private const val SONY_TRACKING = 1.5f
+private const val WALKMAN_TRACKING = 2f
 
 private fun DrawScope.drawBody(unit: Float, g: Layout) {
     fun o(x: Float, y: Float) = Offset(x * unit, y * unit)

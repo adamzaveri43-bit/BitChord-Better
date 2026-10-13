@@ -5374,6 +5374,8 @@ private fun BitChordApp(
             onPlayPause = { togglePlayPause() },
             onNext = { controller?.seekToNextMediaItem() },
             onPrevious = { controller?.seekToPrevious() },
+            liked = playerSong?.let { likeStatuses[it.videoId] == LikeStatus.LIKE } ?: false,
+            onToggleLike = { playerSong?.let { viewModel.toggleLike(it.videoId) } },
         )
     }
 }
