@@ -230,20 +230,73 @@ private fun SideKey(glyph: KeyGlyph, modifier: Modifier, onTap: () -> Unit) {
             )
         },
     ) {
-        val r = CornerRadius(size.width * 0.22f)
-        // The recess, then the key in it.
-        drawRoundRect(Color(0xFF8E9298), cornerRadius = r)
+        val w = size.width
+        val h = size.height
+        val depth = w * 0.09f
+        // How far the key stands out of its slot: right out at rest, nearly
+        // flush while pressed.
+        val lift = if (down) depth * 0.25f else depth
+        val r = CornerRadius(w * 0.16f)
+        // The slot cut into the bar, darker toward its top-left where the
+        // key shades it.
         drawRoundRect(
-            Brush.verticalGradient(
-                if (down) listOf(Color(0xFFB4B7BC), Color(0xFFC8CBCF)) else listOf(Color(0xFFE4E6E9), Color(0xFFBFC2C7)),
+            Brush.linearGradient(
+                listOf(Color(0xFF5E6268), Color(0xFF8E9298)),
+                start = Offset.Zero,
+                end = Offset(w, h),
             ),
-            topLeft = Offset(2f, 2f),
-            size = Size(size.width - 4f, size.height - 4f),
             cornerRadius = r,
         )
-        val c = center
-        val s = size.width * 0.17f
-        val ink = Color(0xFF4A4F57)
+        // The key's side, seen below and to the right of its face.
+        val faceW = w - depth - 4f
+        val faceH = h - depth - 4f
+        val faceX = 2f + (depth - lift)
+        val faceY = 2f + (depth - lift)
+        drawRoundRect(
+            Color(0xFF8A8F96),
+            topLeft = Offset(faceX + lift * 0.6f, faceY + lift),
+            size = Size(faceW, faceH),
+            cornerRadius = r,
+        )
+        drawRoundRect(
+            Color(0xFF7A7F86),
+            topLeft = Offset(faceX + lift, faceY + lift * 0.6f),
+            size = Size(faceW, faceH),
+            cornerRadius = r,
+        )
+        // The face: brushed aluminium, ribbed across like the real keys.
+        val face = Offset(faceX, faceY)
+        drawRoundRect(
+            Brush.verticalGradient(
+                if (down) listOf(Color(0xFFC3C6CB), Color(0xFFADB1B7)) else listOf(Color(0xFFEDEFF1), Color(0xFFC2C5CA)),
+                startY = faceY,
+                endY = faceY + faceH,
+            ),
+            topLeft = face,
+            size = Size(faceW, faceH),
+            cornerRadius = r,
+        )
+        var y = faceY + faceH * 0.08f
+        while (y < faceY + faceH * 0.92f) {
+            drawLine(Color.Black.copy(alpha = 0.10f), Offset(faceX + faceW * 0.1f, y), Offset(faceX + faceW * 0.9f, y), 1.2f)
+            drawLine(Color.White.copy(alpha = 0.35f), Offset(faceX + faceW * 0.1f, y + 1.3f), Offset(faceX + faceW * 0.9f, y + 1.3f), 1f)
+            y += h * 0.06f
+        }
+        // Light along the top and left edges, shade along the bottom and right.
+        drawRoundRect(
+            Brush.linearGradient(
+                listOf(Color.White.copy(alpha = 0.85f), Color.Transparent, Color.Black.copy(alpha = 0.25f)),
+                start = face,
+                end = Offset(faceX + faceW, faceY + faceH),
+            ),
+            topLeft = face,
+            size = Size(faceW, faceH),
+            cornerRadius = r,
+            style = Stroke(1.6f),
+        )
+        val c = Offset(faceX + faceW / 2f, faceY + faceH / 2f)
+        val s = faceW * 0.18f
+        val ink = Color(0xFF3F444B)
         fun tri(x0: Float, right: Boolean, w: Float) {
             val tip = if (right) x0 + w else x0 - w
             drawPath(

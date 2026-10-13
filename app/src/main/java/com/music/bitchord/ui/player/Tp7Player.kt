@@ -7,6 +7,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.PlaybackPosition
 import kotlinx.coroutines.Job
@@ -127,6 +129,9 @@ fun Tp7Player(
      * own at its true proportions, centred on black: the player's way.
      */
     deck: Boolean = false,
+    /** For the deck: the song's words, and the user's offset for them. */
+    lyrics: List<LyricLine>? = null,
+    lyricsOffsetMs: Int = 0,
 ) {
     val view = LocalView.current
     val density = LocalDensity.current
@@ -260,6 +265,10 @@ fun Tp7Player(
                 if (extra >= DECK_MIN) {
                     DeckDisplay(
                         units = ::units,
+                        lyrics = lyrics,
+                        positionMs = shownMs,
+                        durationMs = durationMs,
+                        lyricsOffsetMs = lyricsOffsetMs,
                         modifier = Modifier.at(DECK_MARGIN, DECK_MARGIN, BODY_W - DECK_MARGIN * 2, extra - DECK_MARGIN),
                     )
                 }
@@ -598,14 +607,22 @@ private fun SkipMark(
 }
 
 /**
- * The large OLED on the deck above the device: a clock. The device's own small
- * display already has the track, so this one has what it doesn't — the time
- * and the date, in the same monospace. White on black, so on the idle screen
- * it costs next to nothing to light.
+ * The large OLED on the deck above the device: the words of the song, in a
+ * pixel face like the small display's, with the date and time in its top
+ * corners. The device's own small display already has the title and counter.
+ *
+ * Synced lyrics follow the song — the line being sung large and bright, the
+ * one before and the ones after dimmer around it. Lyrics without timings are
+ * paged through in step with the song. A song with none shows a big clock.
+ * White on black, so on the idle screen it costs next to nothing to light.
  */
 @Composable
 private fun DeckDisplay(
     units: (Float) -> androidx.compose.ui.unit.TextUnit,
+    lyrics: List<LyricLine>?,
+    positionMs: Long,
+    durationMs: Long,
+    lyricsOffsetMs: Int,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -623,9 +640,20 @@ private fun DeckDisplay(
         java.text.SimpleDateFormat(pattern, locale).format(java.util.Date(now))
     }
     val date = remember(now) {
-        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM")
+        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "EEEdMMM")
         java.text.SimpleDateFormat(pattern, locale).format(java.util.Date(now)).uppercase(locale)
     }
+    val lines = remember(lyrics) { lyrics?.filterNot { it.text.isBlank() }.orEmpty() }
+    val synced = remember(lines) { lines.size > 1 && lines.last().timeMs > 0 }
+    // The line being sung: the last one due by now. A line is due when the
+    // song reaches its time plus the lyrics offset, as in the main lyrics.
+    val current = when {
+        lines.isEmpty() -> -1
+        synced -> lines.indexOfLast { it.timeMs + lyricsOffsetMs <= positionMs }.coerceAtLeast(0)
+        durationMs > 0 -> ((positionMs.toFloat() / durationMs) * lines.size).toInt().coerceIn(0, lines.size - 1)
+        else -> 0
+    }
+
     Box(
         modifier
             .clip(RoundedCornerShape(4))
@@ -633,29 +661,63 @@ private fun DeckDisplay(
             .padding(1.5.dp)
             .clip(RoundedCornerShape(4))
             .background(Color.Black),
-        contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = time,
-                color = Color.White,
-                fontSize = units(120f),
-                fontFamily = FontFamily.Monospace,
-                maxLines = 1,
-                style = TightText,
-            )
-            Spacer(Modifier.height(14.dp))
-            Text(
-                text = date,
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = units(20f),
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = units(1f),
-                maxLines = 1,
-            )
+        // ---- Date and time, in the corners ----
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Text(date, color = Color.White.copy(alpha = 0.8f), fontFamily = PixelFont, fontSize = units(24f), maxLines = 1)
+            Spacer(Modifier.weight(1f))
+            Text(time, color = Color.White.copy(alpha = 0.8f), fontFamily = PixelFont, fontSize = units(24f), maxLines = 1)
+        }
+
+        // ---- The words, filling the rest ----
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(start = 16.dp, end = 16.dp, top = 44.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            if (current < 0) {
+                Text(
+                    text = time,
+                    color = Color.White,
+                    fontFamily = PixelFont,
+                    fontSize = units(150f),
+                    maxLines = 1,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                lines.getOrNull(current - 1)?.let { LyricRow(it.text, units(30f), 0.35f, 2) }
+                Spacer(Modifier.height(6.dp))
+                LyricRow(lines[current].text, units(46f), 1f, 3)
+                Spacer(Modifier.height(6.dp))
+                lines.getOrNull(current + 1)?.let { LyricRow(it.text, units(30f), 0.5f, 2) }
+                lines.getOrNull(current + 2)?.let { LyricRow(it.text, units(30f), 0.3f, 2) }
+            }
         }
     }
 }
+
+@Composable
+private fun LyricRow(text: String, size: androidx.compose.ui.unit.TextUnit, alpha: Float, maxLines: Int) {
+    Text(
+        text = text,
+        color = Color.White.copy(alpha = alpha),
+        fontFamily = PixelFont,
+        fontSize = size,
+        lineHeight = size,
+        maxLines = maxLines,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** VT323: a terminal's pixel face, to sit with the OLEDs. Open Font License. */
+private val PixelFont = FontFamily(androidx.compose.ui.text.font.Font(com.music.bitchord.R.font.vt323))
 
 /** Runs [onChange] when [value] changes, but not for the value it starts with. */
 @Composable

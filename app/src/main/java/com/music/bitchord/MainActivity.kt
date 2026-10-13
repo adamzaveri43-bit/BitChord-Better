@@ -5376,6 +5376,7 @@ private fun BitChordApp(
             onPrevious = { controller?.seekToPrevious() },
             liked = playerSong?.let { likeStatuses[it.videoId] == LikeStatus.LIKE } ?: false,
             onToggleLike = { playerSong?.let { viewModel.toggleLike(it.videoId) } },
+            lyrics = lyrics,
         )
     }
 }

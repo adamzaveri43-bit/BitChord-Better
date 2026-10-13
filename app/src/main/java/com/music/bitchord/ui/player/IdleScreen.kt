@@ -1,6 +1,9 @@
 package com.music.bitchord.ui.player
 
 import android.os.Build
+import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.IntOffset
+import com.music.bitchord.data.lyrics.LyricLine
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -168,6 +171,8 @@ fun IdleScreenHost(
     onPrevious: () -> Unit = {},
     liked: Boolean = false,
     onToggleLike: () -> Unit = {},
+    /** For the TP-7's deck: the song's words. */
+    lyrics: List<LyricLine>? = null,
 ) {
     var shown by remember { mutableStateOf(false) }
     val last by IdleActivity.lastInteraction.collectAsState()
@@ -292,6 +297,8 @@ fun IdleScreenHost(
                         onOpenSongMenu = {},
                         modifier = Modifier.fullBleedDrift(),
                         deck = true,
+                        lyrics = lyrics,
+                        lyricsOffsetMs = AppSettings.lyricsOffsetMs.collectAsState().value,
                     )
                 }
                 IdleFace.WALKMAN -> {
@@ -336,19 +343,27 @@ private fun Modifier.fullBleedDrift(): Modifier =
 private fun idleVeil(percent: Int): Float =
     ((40 - percent) / 40f).coerceIn(0f, 1f) * 0.45f
 
-/** Nudges the content a few dp each minute, against burn-in. */
+/**
+ * Moves the content a pixel or two every few minutes, against burn-in — too
+ * little, and too slowly, to be seen. (It used to jump up to 6dp in one go
+ * every minute, which read as the face shifting out of place on its own.)
+ */
 @Composable
 private fun Modifier.burnInDrift(): Modifier {
-    var x by remember { mutableStateOf(0) }
-    var y by remember { mutableStateOf(0) }
+    val x = remember { Animatable(0f) }
+    val y = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(60_000L)
-            x = Random.nextInt(-DRIFT_DP, DRIFT_DP + 1)
-            y = Random.nextInt(-DRIFT_DP, DRIFT_DP + 1)
+            delay(DRIFT_INTERVAL_MS)
+            val tx = Random.nextInt(-DRIFT_DP, DRIFT_DP + 1).toFloat()
+            val ty = Random.nextInt(-DRIFT_DP, DRIFT_DP + 1).toFloat()
+            kotlinx.coroutines.coroutineScope {
+                launch { x.animateTo(tx, tween(DRIFT_GLIDE_MS)) }
+                launch { y.animateTo(ty, tween(DRIFT_GLIDE_MS)) }
+            }
         }
     }
-    return offset(x.dp, y.dp)
+    return offset { IntOffset(x.value.dp.roundToPx(), y.value.dp.roundToPx()) }
 }
 
 /**
@@ -578,7 +593,9 @@ private fun clock(ms: Long): String {
 }
 
 /** Enough over-scan that a [DRIFT_DP] nudge can't uncover an edge. */
-private const val FULL_BLEED_SCALE = 1.04f
+private const val FULL_BLEED_SCALE = 1.02f
 private const val PAUSED_GRACE_MS = 60_000L
 private const val POKE_INTERVAL_MS = 1_000L
-private const val DRIFT_DP = 6
+private const val DRIFT_DP = 2
+private const val DRIFT_INTERVAL_MS = 180_000L
+private const val DRIFT_GLIDE_MS = 4_000
