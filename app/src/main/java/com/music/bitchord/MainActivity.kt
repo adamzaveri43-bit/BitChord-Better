@@ -526,11 +526,9 @@ private fun BitChordApp(
             ipodNowPlayingRequests++
         }
     }
-    val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
     // The always-on display: up only when it's turned on from the player's
     // menu, and down again when it's tapped away.
     var showAlwaysOn by remember { mutableStateOf(false) }
-    val idleScreenBrightness by AppSettings.idleScreenBrightness.collectAsStateWithLifecycle()
     val activeDock = playerDock.takeIf { !reducePlayerMotion }
     playerSheetMotion.flingVelocity = with(LocalDensity.current) { PLAYER_PULL_FLING_VELOCITY.toPx() }
     // How the app takes the player down, whatever for: a back press, or a page
@@ -5354,58 +5352,95 @@ private fun BitChordApp(
         }
 
         // Last, so its window goes up over the player's.
-        IdleScreenHost(
-            face = when (idleScreenMode) {
-                IdleScreenMode.APPLE_MUSIC -> IdleFace.APPLE_MUSIC
-                IdleScreenMode.WALKMAN -> IdleFace.WALKMAN
-                IdleScreenMode.TP7 -> IdleFace.TP7
-            },
+        AlwaysOnDisplay(
             shown = showAlwaysOn,
             onDismiss = { showAlwaysOn = false },
             song = playerSong,
-            isPlaying = player.isPlaying,
-            position = player.position,
-            durationMs = player.durationMs,
-            queueIndex = player.queueIndex,
-            brightnessPercent = idleScreenBrightness,
-            onPlayPause = { togglePlayPause() },
-            onNext = { controller?.seekToNextMediaItem() },
-            onPrevious = { controller?.seekToPrevious() },
+            player = player,
+            controller = controller,
             liked = playerSong?.let { likeStatuses[it.videoId] == LikeStatus.LIKE } ?: false,
             onToggleLike = { playerSong?.let { viewModel.toggleLike(it.videoId) } },
-            onSeek = { target ->
-                controller?.let { c ->
-                    val duration = c.duration
-                    if (duration > 0) {
-                        c.seekTo(target.coerceIn(0L, (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)))
-                    }
-                }
-            },
-            onStop = {
-                controller?.let {
-                    it.pause()
-                    it.seekTo(0L)
-                }
-            },
+            onPlayPause = togglePlayPause,
             shuffleEnabled = shuffleEnabled,
-            repeatMode = player.repeatMode,
             autoplayEnabled = autoplayEnabled,
-            onToggleShuffle = { controller?.toggleShuffle() },
-            onCycleRepeat = {
-                controller?.let {
-                    val next = when (it.repeatMode) {
-                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                        else -> Player.REPEAT_MODE_OFF
-                    }
-                    AppSettings.setRepeatMode(next)
-                    it.repeatMode = next
-                }
-            },
-            onToggleAutoplay = { controller?.toggleAutoplay() },
             lyrics = lyrics,
         )
     }
+}
+
+/**
+ * The always-on display, wired to the player. A function of its own rather
+ * than inline in [BitChordApp], which is already at the JVM's limit on the
+ * size of one method.
+ */
+@Composable
+private fun AlwaysOnDisplay(
+    shown: Boolean,
+    onDismiss: () -> Unit,
+    song: Song?,
+    player: com.music.bitchord.playback.PlayerState,
+    controller: MediaController?,
+    liked: Boolean,
+    onToggleLike: () -> Unit,
+    onPlayPause: () -> Unit,
+    shuffleEnabled: Boolean,
+    autoplayEnabled: Boolean,
+    lyrics: List<com.music.bitchord.data.lyrics.LyricLine>?,
+) {
+    val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
+    val idleScreenBrightness by AppSettings.idleScreenBrightness.collectAsStateWithLifecycle()
+    IdleScreenHost(
+        face = when (idleScreenMode) {
+            IdleScreenMode.APPLE_MUSIC -> IdleFace.APPLE_MUSIC
+            IdleScreenMode.WALKMAN -> IdleFace.WALKMAN
+            IdleScreenMode.TP7 -> IdleFace.TP7
+        },
+        shown = shown,
+        onDismiss = onDismiss,
+        song = song,
+        isPlaying = player.isPlaying,
+        position = player.position,
+        durationMs = player.durationMs,
+        queueIndex = player.queueIndex,
+        brightnessPercent = idleScreenBrightness,
+        onPlayPause = onPlayPause,
+        onNext = { controller?.seekToNextMediaItem() },
+        onPrevious = { controller?.seekToPrevious() },
+        liked = liked,
+        onToggleLike = onToggleLike,
+        onSeek = { target ->
+            controller?.let { c ->
+                val duration = c.duration
+                if (duration > 0) {
+                    c.seekTo(target.coerceIn(0L, (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)))
+                }
+            }
+        },
+        // Stop as the device means it: halt, and back to the top.
+        onStop = {
+            controller?.let {
+                it.pause()
+                it.seekTo(0L)
+            }
+        },
+        shuffleEnabled = shuffleEnabled,
+        repeatMode = player.repeatMode,
+        autoplayEnabled = autoplayEnabled,
+        onToggleShuffle = { controller?.toggleShuffle() },
+        onCycleRepeat = {
+            controller?.let {
+                val next = when (it.repeatMode) {
+                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                    else -> Player.REPEAT_MODE_OFF
+                }
+                AppSettings.setRepeatMode(next)
+                it.repeatMode = next
+            }
+        },
+        onToggleAutoplay = { controller?.toggleAutoplay() },
+        lyrics = lyrics,
+    )
 }
 
 private fun tween(durationMillis: Int) =

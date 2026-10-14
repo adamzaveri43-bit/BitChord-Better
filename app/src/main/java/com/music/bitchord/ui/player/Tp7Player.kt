@@ -892,8 +892,15 @@ private fun Key(
 ) {
     var pressed by remember { mutableStateOf(false) }
     val down = pressed || latched
-    Box(modifier.clip(shape)) {
-        Canvas(Modifier.fillMaxSize()) {
+    // Only the drawing takes the shape. A clip on the whole key would shape
+    // its touch area too, and the record key's rounded corner left it taking
+    // no touches at all.
+    Box(modifier) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .clip(shape),
+        ) {
             // The seam round the key.
             drawRect(Color(0xFF8D9094))
             // Down reads as shade, not as a gap opening above the key: the
