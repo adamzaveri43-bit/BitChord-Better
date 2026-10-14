@@ -81,7 +81,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -140,12 +139,20 @@ fun IdleScreenHost(
     queueIndex: Int = 0,
     /** How bright the face is, in percent of full: the screen's own level while it's up. */
     brightnessPercent: Int = AppSettings.DEFAULT_IDLE_BRIGHTNESS,
-    /** For faces that carry transport keys (the Walkman's side bar). */
+    /** For faces that carry working keys: the Walkman's side bar, the Apple card, the whole TP-7. */
     onPlayPause: () -> Unit = {},
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
     liked: Boolean = false,
     onToggleLike: () -> Unit = {},
+    onSeek: (Long) -> Unit = {},
+    onStop: () -> Unit = {},
+    shuffleEnabled: Boolean = false,
+    repeatMode: Int = 0,
+    autoplayEnabled: Boolean = false,
+    onToggleShuffle: () -> Unit = {},
+    onCycleRepeat: () -> Unit = {},
+    onToggleAutoplay: () -> Unit = {},
     /** For the TP-7's deck: the song's words. */
     lyrics: List<LyricLine>? = null,
 ) {
@@ -216,23 +223,14 @@ fun IdleScreenHost(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(face) {
-                        if (face == IdleFace.WALKMAN || face == IdleFace.APPLE_MUSIC) {
-                            // These faces' keys work without waking: they
-                            // take their own taps, and anything they don't take —
-                            // a touch anywhere else — wakes the app as it lifts.
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                val up = waitForUpOrCancellation()
-                                if (up != null) wake()
-                            }
-                        } else {
-                            // Any touch at all wakes the app, and none reaches the face.
-                            awaitEachGesture {
-                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                                down.consume()
-                                wake()
-                            }
+                    .pointerInput(Unit) {
+                        // Every face's keys work without waking: they take their
+                        // own taps and drags, and anything they don't take — a
+                        // touch anywhere else — wakes the app as it lifts.
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            val up = waitForUpOrCancellation()
+                            if (up != null) wake()
                         }
                     },
             ) {
@@ -255,20 +253,20 @@ fun IdleScreenHost(
                             position = position,
                             durationMs = durationMs,
                             queueIndex = queueIndex,
-                            liked = false,
-                            shuffleEnabled = false,
-                            repeatMode = 0,
-                            autoplayEnabled = false,
-                            onPlayPause = {},
-                            onStop = {},
-                            onNext = {},
-                            onPrevious = {},
-                            onSeek = {},
-                            onToggleLike = {},
-                            onToggleShuffle = {},
-                            onCycleRepeat = {},
-                            onToggleAutoplay = {},
-                            onClose = {},
+                            liked = liked,
+                            shuffleEnabled = shuffleEnabled,
+                            repeatMode = repeatMode,
+                            autoplayEnabled = autoplayEnabled,
+                            onPlayPause = onPlayPause,
+                            onStop = onStop,
+                            onNext = onNext,
+                            onPrevious = onPrevious,
+                            onSeek = onSeek,
+                            onToggleLike = onToggleLike,
+                            onToggleShuffle = onToggleShuffle,
+                            onCycleRepeat = onCycleRepeat,
+                            onToggleAutoplay = onToggleAutoplay,
+                            onClose = wake,
                             onOpenSongMenu = {},
                             modifier = Modifier.fullBleedDrift(),
                             deck = true,

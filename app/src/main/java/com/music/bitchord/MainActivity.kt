@@ -5373,6 +5373,36 @@ private fun BitChordApp(
             onPrevious = { controller?.seekToPrevious() },
             liked = playerSong?.let { likeStatuses[it.videoId] == LikeStatus.LIKE } ?: false,
             onToggleLike = { playerSong?.let { viewModel.toggleLike(it.videoId) } },
+            onSeek = { target ->
+                controller?.let { c ->
+                    val duration = c.duration
+                    if (duration > 0) {
+                        c.seekTo(target.coerceIn(0L, (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)))
+                    }
+                }
+            },
+            onStop = {
+                controller?.let {
+                    it.pause()
+                    it.seekTo(0L)
+                }
+            },
+            shuffleEnabled = shuffleEnabled,
+            repeatMode = player.repeatMode,
+            autoplayEnabled = autoplayEnabled,
+            onToggleShuffle = { controller?.toggleShuffle() },
+            onCycleRepeat = {
+                controller?.let {
+                    val next = when (it.repeatMode) {
+                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                        else -> Player.REPEAT_MODE_OFF
+                    }
+                    AppSettings.setRepeatMode(next)
+                    it.repeatMode = next
+                }
+            },
+            onToggleAutoplay = { controller?.toggleAutoplay() },
             lyrics = lyrics,
         )
     }
