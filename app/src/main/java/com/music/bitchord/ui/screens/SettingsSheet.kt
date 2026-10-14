@@ -76,6 +76,7 @@ import com.music.bitchord.data.settings.PlayerStyle
 import com.music.bitchord.data.settings.AppInterface
 import androidx.compose.material.icons.rounded.Album
 import com.music.bitchord.data.settings.IdleScreenMode
+import com.music.bitchord.data.settings.IpodColor
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.SignalCellularAlt
@@ -243,7 +244,7 @@ fun SettingsScreen(
     val playerStyle by AppSettings.playerStyle.collectAsStateWithLifecycle()
     val appInterface by AppSettings.appInterface.collectAsStateWithLifecycle()
     val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
-    val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
+    val ipodColor by AppSettings.ipodColor.collectAsStateWithLifecycle()
     val idleScreenBrightness by AppSettings.idleScreenBrightness.collectAsStateWithLifecycle()
     val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
     val swipeToPlayNext by AppSettings.swipeToPlayNext.collectAsStateWithLifecycle()
@@ -1339,6 +1340,22 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
             }
+            val ipodColorTitle = stringResource(R.string.ipod_color_setting)
+            row(ipodColorTitle, "ipod", "click wheel", "color", "colour", "white", "black", "dark") {
+                SettingsRow(
+                    icon = Icons.Rounded.Album,
+                    title = ipodColorTitle,
+                )
+                SegmentedControl(
+                    options = listOf(
+                        stringResource(R.string.ipod_color_white),
+                        stringResource(R.string.ipod_color_black),
+                    ),
+                    selectedIndex = IpodColor.entries.indexOf(ipodColor),
+                    onSelect = { AppSettings.setIpodColor(IpodColor.entries[it]) },
+                    modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
+                )
+            }
             val idleScreenTitle = stringResource(R.string.idle_screen)
             row(idleScreenTitle, "aod", "always on", "always-on display", "idle", "lock screen", "clock", "walkman", "tp-7") {
                 SettingsRow(
@@ -1348,44 +1365,23 @@ fun SettingsScreen(
                 )
                 SegmentedControl(
                     options = listOf(
-                        stringResource(R.string.idle_screen_off),
                         stringResource(R.string.idle_screen_apple_music),
                         stringResource(R.string.player_style_walkman),
                         stringResource(R.string.player_style_tp7),
                     ),
                     selectedIndex = IdleScreenMode.entries.indexOf(idleScreenMode),
                     onSelect = { AppSettings.setIdleScreenMode(IdleScreenMode.entries[it]) },
-                    modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 10.dp),
+                    modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 4.dp),
                 )
-                if (idleScreenMode != IdleScreenMode.OFF) {
-                    Text(
-                        text = stringResource(R.string.idle_screen_delay),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = TEXT_INSET, bottom = 6.dp),
-                    )
-                    SegmentedControl(
-                        options = AppSettings.IDLE_SCREEN_DELAYS.map { seconds ->
-                            if (seconds == 60) {
-                                stringResource(R.string.idle_screen_minute)
-                            } else {
-                                stringResource(R.string.idle_screen_seconds, seconds)
-                            }
-                        },
-                        selectedIndex = AppSettings.IDLE_SCREEN_DELAYS.indexOf(idleScreenDelay),
-                        onSelect = { AppSettings.setIdleScreenDelaySeconds(AppSettings.IDLE_SCREEN_DELAYS[it]) },
-                        modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 4.dp),
-                    )
-                    SliderRow(
-                        icon = Icons.Rounded.Brightness4,
-                        title = stringResource(R.string.idle_screen_brightness),
-                        value = "$idleScreenBrightness%",
-                        sliderValue = idleScreenBrightness.toFloat(),
-                        onSliderValue = { AppSettings.setIdleScreenBrightness(it.roundToInt()) },
-                        valueRange = AppSettings.MIN_IDLE_BRIGHTNESS.toFloat()..AppSettings.MAX_IDLE_BRIGHTNESS.toFloat(),
-                        steps = AppSettings.MAX_IDLE_BRIGHTNESS - AppSettings.MIN_IDLE_BRIGHTNESS - 1,
-                    )
-                }
+                SliderRow(
+                    icon = Icons.Rounded.Brightness4,
+                    title = stringResource(R.string.idle_screen_brightness),
+                    value = "$idleScreenBrightness%",
+                    sliderValue = idleScreenBrightness.toFloat(),
+                    onSliderValue = { AppSettings.setIdleScreenBrightness(it.roundToInt()) },
+                    valueRange = AppSettings.MIN_IDLE_BRIGHTNESS.toFloat()..AppSettings.MAX_IDLE_BRIGHTNESS.toFloat(),
+                    steps = AppSettings.MAX_IDLE_BRIGHTNESS - AppSettings.MIN_IDLE_BRIGHTNESS - 1,
+                )
             }
             val hideVolumeBarTitle = stringResource(R.string.hide_volume_bar)
             row(hideVolumeBarTitle, "volume", "player") {

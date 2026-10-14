@@ -268,10 +268,8 @@ import com.music.bitchord.ui.player.Tp7Player
 import com.music.bitchord.ui.player.IpodApp
 import com.music.bitchord.ui.player.IpodActions
 import com.music.bitchord.data.settings.AppInterface
-import com.music.bitchord.ui.player.IdleActivity
 import com.music.bitchord.ui.player.IdleFace
 import com.music.bitchord.ui.player.IdleScreenHost
-import com.music.bitchord.ui.player.pokeIdleOnTouch
 import com.music.bitchord.data.settings.IdleScreenMode
 import com.music.bitchord.data.settings.PlayerStyle
 import com.music.bitchord.ui.player.PlayerSheetMotion
@@ -439,13 +437,6 @@ class MainActivity : AppCompatActivity() {
      * running a second tap on the widget does not rebuild anything — it arrives
      * here, and [onCreate] never runs again.
      */
-    // Touches and keys anywhere in the activity's own window hold off the
-    // idle screen. The sheets in windows of their own report separately.
-    override fun onUserInteraction() {
-        super.onUserInteraction()
-        IdleActivity.poke()
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Replaces what getIntent() returns, so the extra this consumes is the
@@ -536,7 +527,9 @@ private fun BitChordApp(
         }
     }
     val idleScreenMode by AppSettings.idleScreenMode.collectAsStateWithLifecycle()
-    val idleScreenDelay by AppSettings.idleScreenDelaySeconds.collectAsStateWithLifecycle()
+    // The always-on display: up only when it's turned on from the player's
+    // menu, and down again when it's tapped away.
+    var showAlwaysOn by remember { mutableStateOf(false) }
     val idleScreenBrightness by AppSettings.idleScreenBrightness.collectAsStateWithLifecycle()
     val activeDock = playerDock.takeIf { !reducePlayerMotion }
     playerSheetMotion.flingVelocity = with(LocalDensity.current) { PLAYER_PULL_FLING_VELOCITY.toPx() }
@@ -4057,9 +4050,6 @@ private fun BitChordApp(
                             }
                         }
                         .guardSheetFromContentTouches(nowPlayingSheetState)
-                        // The player is its own window; its touches never
-                        // reach the activity's onUserInteraction.
-                        .pokeIdleOnTouch()
                         // The sheet fills the window, so its height is the
                         // whole of its travel: hidden sits that far down.
                         .onSizeChanged {
@@ -4319,6 +4309,14 @@ private fun BitChordApp(
                 // whatever ids it's ever going to have.
                 resolvingLinks = fromPlayer && linksLoading,
                 showSleepTimer = fromPlayer,
+                onAlwaysOnDisplay = if (fromPlayer && song.videoId == playerSong?.videoId) {
+                    {
+                        songActions = null
+                        showAlwaysOn = true
+                    }
+                } else {
+                    null
+                },
                 // Offered for every playing track with a YouTube upload
                 // behind it, not only for one an upgrade visibly swapped:
                 // a source ranked above YouTube can be playing its own
@@ -4428,9 +4426,7 @@ private fun BitChordApp(
                 // bare strip at the foot, and the rows cut off above it.
                 contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
             ) {
-                Box(Modifier.pokeIdleOnTouch()) {
-                    songMenuBody(song, SongActionsPresentation.Sheet)
-                }
+                songMenuBody(song, SongActionsPresentation.Sheet)
             }
         }
         // Drawn over everything, tab bar and mini player included, and kept
@@ -5346,6 +5342,7 @@ private fun BitChordApp(
                         songMenuOrigin = null
                         songActions = song
                     },
+                    showAlwaysOn = { showAlwaysOn = true },
                     exit = { AppSettings.setAppInterface(AppInterface.REGULAR) },
                     openSettings = {
                         AppSettings.setAppInterface(AppInterface.REGULAR)
@@ -5359,12 +5356,12 @@ private fun BitChordApp(
         // Last, so its window goes up over the player's.
         IdleScreenHost(
             face = when (idleScreenMode) {
-                IdleScreenMode.OFF -> null
                 IdleScreenMode.APPLE_MUSIC -> IdleFace.APPLE_MUSIC
                 IdleScreenMode.WALKMAN -> IdleFace.WALKMAN
                 IdleScreenMode.TP7 -> IdleFace.TP7
             },
-            delaySeconds = idleScreenDelay,
+            shown = showAlwaysOn,
+            onDismiss = { showAlwaysOn = false },
             song = playerSong,
             isPlaying = player.isPlaying,
             position = player.position,

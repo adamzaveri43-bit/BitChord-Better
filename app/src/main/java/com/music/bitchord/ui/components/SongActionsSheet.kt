@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.ScreenLockPortrait
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -152,6 +153,8 @@ fun SongActionsSheet(
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
     showSleepTimer: Boolean = false,
+    /** Puts up the always-on display. Null everywhere but the player's menu. */
+    onAlwaysOnDisplay: (() -> Unit)? = null,
     /**
      * Sends the playing track back to YouTube's own upload, and keeps it there.
      * Offered for any player item that has one behind it — a substituted copy
@@ -349,6 +352,14 @@ fun SongActionsSheet(
                 value = sleepTimerStatus(),
                 accent = palette.accent,
             ) { pickingSleepTimer = true }
+        }
+        onAlwaysOnDisplay?.let {
+            ActionRow(
+                icon = Icons.Rounded.ScreenLockPortrait,
+                label = stringResource(R.string.always_on_display),
+                accent = palette.accent,
+                onClick = it,
+            )
         }
         // Deliberately outside the online-only block below. Local files and
         // completed downloads use the same player lyric clock (including

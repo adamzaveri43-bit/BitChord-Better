@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -56,6 +57,8 @@ import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
+import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.IpodColor
 import com.music.bitchord.playback.PlaybackPosition
 
 /** What the iPod interface asks the app to do. */
@@ -80,6 +83,8 @@ class IpodActions(
     val toggleShuffle: () -> Unit,
     val cycleRepeat: () -> Unit,
     val openSongMenu: (Song) -> Unit,
+    /** Puts up the always-on display. */
+    val showAlwaysOn: () -> Unit,
     /** Back to the regular interface. */
     val exit: () -> Unit,
     /** Back to the regular interface, on its settings. */
@@ -225,6 +230,11 @@ fun IpodApp(
     val repeatLabel = stringResource(R.string.ipod_repeat)
     val classicLabel = stringResource(R.string.ipod_classic_interface)
     val moreSettingsLabel = stringResource(R.string.ipod_more_settings)
+    val alwaysOnLabel = stringResource(R.string.ipod_always_on)
+    val colorLabel = stringResource(R.string.ipod_color)
+    val whiteLabel = stringResource(R.string.ipod_color_white)
+    val blackLabel = stringResource(R.string.ipod_color_black)
+    val ipodColor by AppSettings.ipodColor.collectAsState()
     val searchingLabel = stringResource(R.string.ipod_searching)
     val noResultsLabel = stringResource(R.string.ipod_no_results)
 
@@ -348,7 +358,7 @@ fun IpodApp(
         }
         IpodPage.Settings -> {
             title = settingsLabel
-            rows = listOf(
+            rows = listOfNotNull(
                 IpodRow(shuffleLabel, detail = if (shuffleEnabled) onLabel else offLabel, onSelect = actions.toggleShuffle),
                 IpodRow(
                     repeatLabel,
@@ -359,6 +369,14 @@ fun IpodApp(
                     },
                     onSelect = actions.cycleRepeat,
                 ),
+                IpodRow(
+                    colorLabel,
+                    detail = if (ipodColor == IpodColor.BLACK) blackLabel else whiteLabel,
+                    onSelect = {
+                        AppSettings.setIpodColor(if (ipodColor == IpodColor.BLACK) IpodColor.WHITE else IpodColor.BLACK)
+                    },
+                ),
+                song?.let { IpodRow(alwaysOnLabel, onSelect = actions.showAlwaysOn) },
                 IpodRow(classicLabel, detail = onLabel, onSelect = actions.exit),
                 IpodRow(moreSettingsLabel, opens = true, onSelect = actions.openSettings),
             )

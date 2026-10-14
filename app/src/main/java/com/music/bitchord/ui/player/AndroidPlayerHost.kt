@@ -1,6 +1,9 @@
 package com.music.bitchord.ui.player
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.database.ContentObserver
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -11,6 +14,7 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
@@ -237,7 +241,10 @@ private class CastAwareVolume(
 
 /**
  * The music stream's volume. Hardware keys and the system panel change it
- * behind the app's back, so Settings is watched and the level follows.
+ * behind the app's back, so the level follows them two ways: the system's
+ * volume-changed broadcast, which arrives as each key press lands, and
+ * Settings, which some devices write late or in batches but which catches
+ * whatever the broadcast doesn't.
  */
 private class MusicStreamVolume(private val context: Context) : SystemVolume {
     private val manager = context.getSystemService(AudioManager::class.java)
@@ -245,6 +252,19 @@ private class MusicStreamVolume(private val context: Context) : SystemVolume {
     override val level: StateFlow<Float> = _level.asStateFlow()
 
     init {
+        // Not a public action, but sent by every Android release since 1.6;
+        // without it the bar trails the keys by as long as Settings takes.
+        ContextCompat.registerReceiver(
+            context,
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    val stream = intent.getIntExtra(EXTRA_VOLUME_STREAM_TYPE, AudioManager.STREAM_MUSIC)
+                    if (stream == AudioManager.STREAM_MUSIC) refresh()
+                }
+            },
+            IntentFilter(VOLUME_CHANGED_ACTION),
+            ContextCompat.RECEIVER_EXPORTED,
+        )
         context.contentResolver.registerContentObserver(
             Settings.System.CONTENT_URI,
             true,
@@ -265,5 +285,10 @@ private class MusicStreamVolume(private val context: Context) : SystemVolume {
 
     override fun refresh() {
         _level.value = read()
+    }
+
+    private companion object {
+        const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
+        const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
     }
 }

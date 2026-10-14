@@ -134,10 +134,8 @@ enum class PlayerStyle {
     TP7,
 }
 
-/** The always-on face shown while music plays and the phone sits idle. */
+/** Which face the always-on display wears, when it's opened from the player's menu. */
 enum class IdleScreenMode {
-    OFF,
-
     /** The iPhone's always-on lock screen: clock, date, dimmed artwork. */
     APPLE_MUSIC,
 
@@ -146,6 +144,12 @@ enum class IdleScreenMode {
 
     /** The TP-7-style recorder, dimmed. */
     TP7,
+}
+
+/** The iPod's body: the white one, or the black. */
+enum class IpodColor {
+    WHITE,
+    BLACK,
 }
 
 /** Stable persisted ordering for each on-device music library. */
@@ -402,20 +406,21 @@ object AppSettings {
     /** Hides the volume slider on the main player, leaving the rest of the layout to reflow. */
     val hideVolumeBar = MutableStateFlow(false)
 
-    /** Which always-on face takes over while music plays and nobody touches the phone. */
-    val idleScreenMode = MutableStateFlow(IdleScreenMode.OFF)
+    /** Which face the always-on display wears when it's turned on from the player's menu. */
+    val idleScreenMode = MutableStateFlow(IdleScreenMode.APPLE_MUSIC)
 
     /** How bright the idle screen's face is, in percent of full. */
     val idleScreenBrightness = MutableStateFlow(DEFAULT_IDLE_BRIGHTNESS)
 
-    /** How long without a touch before [idleScreenMode]'s face comes up. */
-    val idleScreenDelaySeconds = MutableStateFlow(DEFAULT_IDLE_SCREEN_DELAY)
 
     /** Which interface the whole app runs as. */
     val appInterface = MutableStateFlow(AppInterface.REGULAR)
 
     /** Which face the full-screen player wears. */
     val playerStyle = MutableStateFlow(PlayerStyle.MODERN)
+
+    /** The iPod's body colour, for the iPod player and the iPod interface alike. */
+    val ipodColor = MutableStateFlow(IpodColor.WHITE)
 
     /** Hides the "Playing from" / "Played by" caption at the top of the main player. */
     val hideSongStatus = MutableStateFlow(false)
@@ -877,19 +882,22 @@ object AppSettings {
         stopOnTaskRemoved.value = prefs.getBoolean(KEY_STOP_ON_TASK_REMOVED, false)
         hideVolumeBar.value = prefs.getBoolean(KEY_HIDE_VOLUME_BAR, false)
         hideSongStatus.value = prefs.getBoolean(KEY_HIDE_SONG_STATUS, false)
+        // An "OFF" saved before the display became something opened by hand
+        // falls back to the first face.
         idleScreenMode.value = runCatching {
-            IdleScreenMode.valueOf(prefs.getString(KEY_IDLE_SCREEN_MODE, null) ?: IdleScreenMode.OFF.name)
-        }.getOrDefault(IdleScreenMode.OFF)
+            IdleScreenMode.valueOf(prefs.getString(KEY_IDLE_SCREEN_MODE, null) ?: IdleScreenMode.APPLE_MUSIC.name)
+        }.getOrDefault(IdleScreenMode.APPLE_MUSIC)
         idleScreenBrightness.value = prefs.getInt(KEY_IDLE_SCREEN_BRIGHTNESS, DEFAULT_IDLE_BRIGHTNESS)
             .coerceIn(MIN_IDLE_BRIGHTNESS, MAX_IDLE_BRIGHTNESS)
-        idleScreenDelaySeconds.value = prefs.getInt(KEY_IDLE_SCREEN_DELAY, DEFAULT_IDLE_SCREEN_DELAY)
-            .takeIf { it in IDLE_SCREEN_DELAYS } ?: DEFAULT_IDLE_SCREEN_DELAY
         appInterface.value = runCatching {
             AppInterface.valueOf(prefs.getString(KEY_APP_INTERFACE, null) ?: AppInterface.REGULAR.name)
         }.getOrDefault(AppInterface.REGULAR)
         playerStyle.value = runCatching {
             PlayerStyle.valueOf(prefs.getString(KEY_PLAYER_STYLE, null) ?: PlayerStyle.MODERN.name)
         }.getOrDefault(PlayerStyle.MODERN)
+        ipodColor.value = runCatching {
+            IpodColor.valueOf(prefs.getString(KEY_IPOD_COLOR, null) ?: IpodColor.WHITE.name)
+        }.getOrDefault(IpodColor.WHITE)
         swipeToPlayNext.value = prefs.getBoolean(KEY_SWIPE_TO_PLAY_NEXT, false)
         dontRepeatSuggestions.value = prefs.getBoolean(KEY_DONT_REPEAT_SUGGESTIONS, false)
         preferMusicOnly.value = prefs.getBoolean(KEY_PREFER_MUSIC_ONLY, false)
@@ -1263,9 +1271,9 @@ object AppSettings {
         prefs.edit().putInt(KEY_IDLE_SCREEN_BRIGHTNESS, clamped).apply()
     }
 
-    fun setIdleScreenDelaySeconds(value: Int) {
-        idleScreenDelaySeconds.value = value
-        prefs.edit().putInt(KEY_IDLE_SCREEN_DELAY, value).apply()
+    fun setIpodColor(value: IpodColor) {
+        ipodColor.value = value
+        prefs.edit().putString(KEY_IPOD_COLOR, value.name).apply()
     }
 
     fun setAppInterface(value: AppInterface) {
@@ -2044,16 +2052,12 @@ object AppSettings {
     private const val KEY_PLAYER_STYLE = "player_style"
     private const val KEY_APP_INTERFACE = "app_interface"
     private const val KEY_IDLE_SCREEN_MODE = "idle_screen_mode"
-    private const val KEY_IDLE_SCREEN_DELAY = "idle_screen_delay"
+    private const val KEY_IPOD_COLOR = "ipod_color"
     private const val KEY_IDLE_SCREEN_BRIGHTNESS = "idle_screen_brightness"
     /** The idle screen's brightness until it's set: dim, as an always-on display is. */
     const val DEFAULT_IDLE_BRIGHTNESS = 10
     const val MIN_IDLE_BRIGHTNESS = 1
     const val MAX_IDLE_BRIGHTNESS = 60
-
-    /** The choices offered for [idleScreenDelaySeconds]. */
-    val IDLE_SCREEN_DELAYS = listOf(15, 30, 60)
-    private const val DEFAULT_IDLE_SCREEN_DELAY = 30
     private const val KEY_HIDE_SONG_STATUS = "hide_song_status"
     private const val KEY_SWIPE_TO_PLAY_NEXT = "swipe_to_play_next"
     private const val KEY_DONT_REPEAT_SUGGESTIONS = "dont_repeat_suggestions"

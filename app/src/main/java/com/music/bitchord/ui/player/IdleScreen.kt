@@ -66,6 +66,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,9 +102,6 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.playback.PlaybackPosition
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -108,56 +111,28 @@ import kotlin.random.Random
 enum class IdleFace { APPLE_MUSIC, WALKMAN, TP7 }
 
 /**
- * When someone last touched the app.
- *
- * The activity reports its own touches and keys through `onUserInteraction`,
- * but the player and the song menu are sheets in windows of their own, whose
- * touches never pass through the activity — those report through
- * [pokeIdleOnTouch].
- */
-object IdleActivity {
-    private val _lastInteraction = MutableStateFlow(SystemClock.uptimeMillis())
-    val lastInteraction: StateFlow<Long> = _lastInteraction.asStateFlow()
-
-    fun poke() {
-        // Once a second is plenty for a timer counted in tens of seconds. A
-        // scroll reports every frame, and each report would otherwise wake the
-        // idle screen's timer and recompose it at the screen's refresh rate.
-        val now = SystemClock.uptimeMillis()
-        if (now - _lastInteraction.value < POKE_INTERVAL_MS) return
-        _lastInteraction.value = now
-    }
-}
-
-/** Counts every touch inside this node as activity, without taking it. */
-fun Modifier.pokeIdleOnTouch(): Modifier = pointerInput(Unit) {
-    awaitPointerEventScope {
-        while (true) {
-            awaitPointerEvent(PointerEventPass.Initial)
-            IdleActivity.poke()
-        }
-    }
-}
-
-/**
  * An always-on face for the app, the nearest thing to one Android lets an app
- * have: while music plays and nobody touches the phone for [delaySeconds], a
- * dim full-screen face takes over, and any touch puts it away.
+ * have: a dim full-screen face over everything, opened by hand from the
+ * player's menu and put away by a touch.
  *
- * - The screen is held on while music plays with this enabled; otherwise the
- *   system's own timeout would turn it off before the face ever showed.
- * - The face's window drops the brightness and hides the system bars.
- * - The content drifts by a few dp each minute, so nothing sits on the same
- *   pixels for hours.
- * - Paused for a while, the face steps aside and lets the screen sleep.
+ * - Nothing brings it up on its own; [shown] is the caller's to set.
+ * - The face's window holds the screen on, drops the brightness and hides the
+ *   system bars.
+ * - The lock in the corner keeps it up: locked, touches and back do nothing
+ *   and the face stays until the lock is held to undo it.
+ * - The content drifts by a few dp every few minutes, so nothing sits on the
+ *   same pixels for hours.
+ * - Unlocked and paused for a while, the face steps aside and lets the screen
+ *   sleep. Locked, it stays.
  *
  * Shown in a dialog so it lands above the player, which is a sheet in a
  * window of its own.
  */
 @Composable
 fun IdleScreenHost(
-    face: IdleFace?,
-    delaySeconds: Int,
+    face: IdleFace,
+    shown: Boolean,
+    onDismiss: () -> Unit,
     song: Song?,
     isPlaying: Boolean,
     position: PlaybackPosition,
@@ -174,38 +149,22 @@ fun IdleScreenHost(
     /** For the TP-7's deck: the song's words. */
     lyrics: List<LyricLine>? = null,
 ) {
-    var shown by remember { mutableStateOf(false) }
-    val last by IdleActivity.lastInteraction.collectAsState()
-
-    // Held on while the face could still come up, and while it is up.
-    val view = LocalView.current
-    val holdScreen = face != null && song != null && (isPlaying || shown)
-    DisposableEffect(view, holdScreen) {
-        view.keepScreenOn = holdScreen
-        onDispose { view.keepScreenOn = false }
+    val dismiss by rememberUpdatedState(onDismiss)
+    // Nothing left to show.
+    LaunchedEffect(shown, song == null) {
+        if (shown && song == null) dismiss()
     }
+    if (!shown || song == null) return
 
-    LaunchedEffect(last, face, delaySeconds, isPlaying, song == null) {
-        if (face == null || song == null || !isPlaying) return@LaunchedEffect
-        val wait = last + delaySeconds * 1000L - SystemClock.uptimeMillis()
-        if (wait > 0) delay(wait)
-        shown = true
-    }
-    LaunchedEffect(shown, isPlaying) {
-        if (shown && !isPlaying) {
+    // Kept for as long as the face is up, and forgotten when it goes.
+    var locked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(isPlaying, locked) {
+        if (!isPlaying && !locked) {
             delay(PAUSED_GRACE_MS)
-            shown = false
+            dismiss()
         }
     }
-    LaunchedEffect(face, song == null) {
-        if (face == null || song == null) shown = false
-    }
-    if (!shown || face == null || song == null) return
-
-    val wake = {
-        shown = false
-        IdleActivity.poke()
-    }
+    val wake = { if (!locked) dismiss() }
     Dialog(
         onDismissRequest = wake,
         properties = DialogProperties(
@@ -236,95 +195,212 @@ fun IdleScreenHost(
         }
         val fade = remember { Animatable(0f) }
         LaunchedEffect(Unit) { fade.animateTo(1f, tween(900)) }
+        // A word on what the lock is doing, for a moment after it's touched.
+        var hint by remember { mutableStateOf<Int?>(null) }
+        var hintAt by remember { mutableLongStateOf(0L) }
+        fun showHint(text: Int) {
+            hint = text
+            hintAt = SystemClock.uptimeMillis()
+        }
+        LaunchedEffect(hintAt) {
+            if (hintAt == 0L) return@LaunchedEffect
+            delay(HINT_MS)
+            hint = null
+        }
         Box(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .graphicsLayer { alpha = fade.value }
-                .pointerInput(face) {
-                    if (face == IdleFace.WALKMAN || face == IdleFace.APPLE_MUSIC) {
-                        // These faces' keys work without waking: they
-                        // take their own taps, and anything they don't take —
-                        // a touch anywhere else — wakes the app as it lifts.
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            val up = waitForUpOrCancellation()
-                            if (up != null) wake()
-                        }
-                    } else {
-                        // Any touch at all wakes the app, and none reaches the face.
-                        awaitEachGesture {
-                            val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                            down.consume()
-                            wake()
-                        }
-                    }
-                },
+                .graphicsLayer { alpha = fade.value },
         ) {
-            when (face) {
-                IdleFace.APPLE_MUSIC -> AppleMusicIdleFace(
-                    song = song,
-                    isPlaying = isPlaying,
-                    position = position,
-                    durationMs = durationMs,
-                    liked = liked,
-                    onToggleLike = onToggleLike,
-                    onPlayPause = onPlayPause,
-                    onNext = onNext,
-                    onPrevious = onPrevious,
-                )
-                IdleFace.TP7 -> {
-                    Tp7Player(
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(face) {
+                        if (face == IdleFace.WALKMAN || face == IdleFace.APPLE_MUSIC) {
+                            // These faces' keys work without waking: they
+                            // take their own taps, and anything they don't take —
+                            // a touch anywhere else — wakes the app as it lifts.
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                val up = waitForUpOrCancellation()
+                                if (up != null) wake()
+                            }
+                        } else {
+                            // Any touch at all wakes the app, and none reaches the face.
+                            awaitEachGesture {
+                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                down.consume()
+                                wake()
+                            }
+                        }
+                    },
+            ) {
+                when (face) {
+                    IdleFace.APPLE_MUSIC -> AppleMusicIdleFace(
                         song = song,
                         isPlaying = isPlaying,
                         position = position,
                         durationMs = durationMs,
-                        queueIndex = queueIndex,
-                        liked = false,
-                        shuffleEnabled = false,
-                        repeatMode = 0,
-                        autoplayEnabled = false,
-                        onPlayPause = {},
-                        onStop = {},
-                        onNext = {},
-                        onPrevious = {},
-                        onSeek = {},
-                        onToggleLike = {},
-                        onToggleShuffle = {},
-                        onCycleRepeat = {},
-                        onToggleAutoplay = {},
-                        onClose = {},
-                        onOpenSongMenu = {},
-                        modifier = Modifier.fullBleedDrift(),
-                        deck = true,
-                        lyrics = lyrics,
-                        lyricsOffsetMs = AppSettings.lyricsOffsetMs.collectAsState().value,
-                    )
-                }
-                IdleFace.WALKMAN -> {
-                    WalkmanFace(
-                        song = song,
-                        isPlaying = isPlaying,
-                        position = position,
-                        durationMs = durationMs,
-                        modifier = Modifier.fullBleedDrift(),
+                        liked = liked,
+                        onToggleLike = onToggleLike,
                         onPlayPause = onPlayPause,
                         onNext = onNext,
                         onPrevious = onPrevious,
                     )
+                    IdleFace.TP7 -> {
+                        Tp7Player(
+                            song = song,
+                            isPlaying = isPlaying,
+                            position = position,
+                            durationMs = durationMs,
+                            queueIndex = queueIndex,
+                            liked = false,
+                            shuffleEnabled = false,
+                            repeatMode = 0,
+                            autoplayEnabled = false,
+                            onPlayPause = {},
+                            onStop = {},
+                            onNext = {},
+                            onPrevious = {},
+                            onSeek = {},
+                            onToggleLike = {},
+                            onToggleShuffle = {},
+                            onCycleRepeat = {},
+                            onToggleAutoplay = {},
+                            onClose = {},
+                            onOpenSongMenu = {},
+                            modifier = Modifier.fullBleedDrift(),
+                            deck = true,
+                            lyrics = lyrics,
+                            lyricsOffsetMs = AppSettings.lyricsOffsetMs.collectAsState().value,
+                        )
+                    }
+                    IdleFace.WALKMAN -> {
+                        WalkmanFace(
+                            song = song,
+                            isPlaying = isPlaying,
+                            position = position,
+                            durationMs = durationMs,
+                            modifier = Modifier.fullBleedDrift(),
+                            onPlayPause = onPlayPause,
+                            onNext = onNext,
+                            onPrevious = onPrevious,
+                        )
+                    }
+                }
+                // Below what the screen can dim to on its own, a veil takes the face
+                // further down; at the top of the range there's none.
+                val veil = idleVeil(brightnessPercent)
+                if (veil > 0f) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = veil)),
+                    )
                 }
             }
-            // Below what the screen can dim to on its own, a veil takes the face
-            // further down; at the top of the range there's none.
-            val veil = idleVeil(brightnessPercent)
-            if (veil > 0f) {
+            // Locked, the face takes no touches at all — its keys included, so a
+            // pocket can't skip a track — and a tap only says how to get out.
+            if (locked) {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = veil)),
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false).consume()
+                                waitForUpOrCancellation()?.let {
+                                    it.consume()
+                                    showHint(R.string.aod_hold_to_unlock)
+                                }
+                            }
+                        },
+                )
+            }
+            IdleLockButton(
+                locked = locked,
+                onLock = {
+                    locked = true
+                    showHint(R.string.aod_locked)
+                },
+                onUnlock = {
+                    locked = false
+                    showHint(R.string.aod_unlocked)
+                },
+                onTapWhileLocked = { showHint(R.string.aod_hold_to_unlock) },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(start = 12.dp, bottom = 6.dp),
+            )
+            hint?.let { text ->
+                Text(
+                    text = stringResource(text),
+                    color = Color.White,
+                    fontFamily = SfPro,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(bottom = 60.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
                 )
             }
         }
+    }
+}
+
+/**
+ * The lock in the face's corner: a tap locks the face in place; once locked,
+ * only a hold undoes it, so nothing brushing the screen can.
+ */
+@Composable
+private fun IdleLockButton(
+    locked: Boolean,
+    onLock: () -> Unit,
+    onUnlock: () -> Unit,
+    onTapWhileLocked: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val view = LocalView.current
+    val lock by rememberUpdatedState(onLock)
+    val unlock by rememberUpdatedState(onUnlock)
+    val tapLocked by rememberUpdatedState(onTapWhileLocked)
+    val isLocked by rememberUpdatedState(locked)
+    Box(
+        modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.45f))
+            .border(0.6.dp, Color.White.copy(alpha = if (locked) 0.35f else 0.18f), CircleShape)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        if (isLocked) {
+                            tapLocked()
+                        } else {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            lock()
+                        }
+                    },
+                    onLongPress = {
+                        if (isLocked) {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            unlock()
+                        }
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (locked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+            contentDescription = stringResource(if (locked) R.string.aod_unlock else R.string.aod_lock),
+            tint = Color.White.copy(alpha = if (locked) 0.85f else 0.6f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -595,7 +671,7 @@ private fun clock(ms: Long): String {
 /** Enough over-scan that a [DRIFT_DP] nudge can't uncover an edge. */
 private const val FULL_BLEED_SCALE = 1.02f
 private const val PAUSED_GRACE_MS = 60_000L
-private const val POKE_INTERVAL_MS = 1_000L
+private const val HINT_MS = 2_000L
 private const val DRIFT_DP = 2
 private const val DRIFT_INTERVAL_MS = 180_000L
 private const val DRIFT_GLIDE_MS = 4_000

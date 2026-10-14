@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.player
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -71,6 +73,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 /**
  * The now-playing screen as a pocket aluminium tape-style recorder, after
@@ -136,14 +139,17 @@ fun Tp7Player(
     val view = LocalView.current
     val density = LocalDensity.current
     val volume = remember { PlayerPlatform.host.volume }
+    // The output may have changed while the player was away.
+    LaunchedEffect(volume) { volume.refresh() }
     val systemVolume by volume.level.collectAsState()
-    // Followed locally while it's being changed: the stream has only 15-odd
-    // steps, and the system's answer to each set comes back late.
+    // Followed locally while it's being changed here: the stream has only
+    // 15-odd steps, and the system's answer to each set comes back late.
     var volumeTarget by remember { mutableStateOf<Float?>(null) }
     var volumeTouchedAt by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(volumeTouchedAt) {
-        if (volumeTouchedAt == 0L) return@LaunchedEffect
-        delay(1_500L)
+    var faderHeld by remember { mutableStateOf(false) }
+    LaunchedEffect(volumeTouchedAt, faderHeld) {
+        if (volumeTouchedAt == 0L || faderHeld) return@LaunchedEffect
+        delay(VOLUME_SETTLE_MS)
         volumeTarget = null
     }
     val volumeLevel = volumeTarget ?: systemVolume
@@ -166,7 +172,36 @@ fun Tp7Player(
         volumeTarget = to
         volumeTouchedAt = System.nanoTime()
         volume.set(to)
-        showFlash("VOL ${(to * 100).toInt()}")
+        showFlash("VOL ${(to * 100).roundToInt()}")
+    }
+
+    // The phone's own volume keys, the system panel, a cast receiver: the
+    // fader follows them as they happen. A level that is only this player's
+    // own set coming back is let through quietly; anything else takes over
+    // from whatever was last set here, and shows on the OLED as the keys
+    // move it.
+    var lastSystemVolume by remember { mutableFloatStateOf(systemVolume) }
+    LaunchedEffect(systemVolume) {
+        if (systemVolume == lastSystemVolume) return@LaunchedEffect
+        lastSystemVolume = systemVolume
+        if (faderHeld) return@LaunchedEffect
+        val target = volumeTarget
+        if (target == null || abs(target - systemVolume) > VOLUME_ECHO_TOLERANCE) {
+            volumeTarget = null
+            showFlash("VOL ${(systemVolume * 100).roundToInt()}")
+        } else {
+            volumeTarget = null
+        }
+    }
+    // Drawn eased toward the level rather than jumping a whole step at a
+    // time, except under a finger, where it has to stay where it's held.
+    val shownVolume = remember { Animatable(volumeLevel) }
+    LaunchedEffect(volumeLevel, faderHeld) {
+        if (faderHeld) {
+            shownVolume.snapTo(volumeLevel)
+        } else {
+            shownVolume.animateTo(volumeLevel, tween(VOLUME_EASE_MS))
+        }
     }
 
     // Changes made elsewhere, or arriving after their command, flash too.
@@ -530,7 +565,7 @@ fun Tp7Player(
 
                 // ---- Fader ----
                 Canvas(Modifier.at(360f, 510f + ds, 110f, 160f + keyGrow)) {
-                    drawFader(level = volumeLevel, unit = u.toPx(), travel = faderTravel, shift = ds)
+                    drawFader(level = shownVolume.value, unit = u.toPx(), travel = faderTravel, shift = ds)
                 }
                 Box(
                     Modifier
@@ -539,6 +574,7 @@ fun Tp7Player(
                             awaitEachGesture {
                                 val down = awaitFirstDown()
                                 down.consume()
+                                faderHeld = true
                                 val travel = faderTravel * u.toPx()
                                 val top = (FADER_TOP - 505f) * u.toPx()
                                 fun levelAt(y: Float) = 1f - ((y - top) / travel).coerceIn(0f, 1f)
@@ -557,6 +593,8 @@ fun Tp7Player(
                                     }
                                     change.consume()
                                 }
+                                faderHeld = false
+                                volumeTouchedAt = System.nanoTime()
                             }
                         },
                 )
@@ -750,13 +788,14 @@ private fun Oled(
             .background(Color.Black)
             .padding(horizontal = 6.dp, vertical = 3.dp),
     ) {
+        // The same pixel face as the deck's big display.
         Text(
             text = title,
             color = Color.White,
-            fontSize = units(if (isFlash) 17f else 22f),
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            fontSize = units(if (isFlash) 22f else 27f),
+            fontFamily = PixelFont,
             maxLines = 1,
+            style = TightText,
             modifier = Modifier
                 .fillMaxWidth()
                 .basicMarquee(iterations = Int.MAX_VALUE),
@@ -765,9 +804,10 @@ private fun Oled(
             Text(
                 text = time,
                 color = Color.White,
-                fontSize = units(14f),
-                fontFamily = FontFamily.Monospace,
+                fontSize = units(19f),
+                fontFamily = PixelFont,
                 maxLines = 1,
+                style = TightText,
             )
             Spacer(Modifier.weight(1f))
             Box(
@@ -781,9 +821,8 @@ private fun Oled(
                 Text(
                     text = "%02d".format(track.coerceIn(0, 99)),
                     color = Color.Black,
-                    fontSize = units(12f),
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = units(16f),
+                    fontFamily = PixelFont,
                     maxLines = 1,
                     style = TightText,
                 )
@@ -1119,5 +1158,10 @@ private const val DISC_CUE_DEG_S = 900f
 private const val SCRUB_MS_PER_TURN = 20_000f
 private const val CUE_STEP_MS = 4_000L
 private const val VOLUME_STEP = 1f / 15f
+/** How long a level set here is held before the system's own reading is trusted again. */
+private const val VOLUME_SETTLE_MS = 1_500L
+/** Within this of what was set here, a new system level is that set coming back. */
+private const val VOLUME_ECHO_TOLERANCE = 0.034f
+private const val VOLUME_EASE_MS = 140
 private const val HOLD_MS = 400L
 private const val REPEAT_MS = 120L

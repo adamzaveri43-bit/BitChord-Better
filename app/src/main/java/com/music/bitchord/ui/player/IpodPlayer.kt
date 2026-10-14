@@ -63,7 +63,16 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.view.WindowCompat
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.IpodColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,7 +100,7 @@ import kotlin.math.min
  * - Holding the centre button opens the track's menu.
  * - MENU puts the player away, the arrows skip, the bottom plays and pauses.
  *
- * Always the white iPod, whatever the app's theme.
+ * White or black as the iPod colour setting says, whatever the app's theme.
  */
 @Composable
 fun IpodPlayer(
@@ -204,22 +213,24 @@ fun IpodPlayer(
 }
 
 /**
- * Dark status and navigation bar icons while the white body is under them,
- * put back as they were when it goes. Works in the activity's window and in
- * the player sheet's, whichever this is drawn in.
+ * Status and navigation bar icons that read against the body under them —
+ * dark on the white one, light on the black — put back as they were when it
+ * goes. Works in the activity's window and in the player sheet's, whichever
+ * this is drawn in.
  */
 @Composable
-private fun DarkSystemBarIcons() {
+private fun SystemBarIconsFor(finish: IpodFinish) {
     val view = LocalView.current
-    DisposableEffect(view) {
+    val light = finish.lightBody
+    DisposableEffect(view, light) {
         val window = (view.parent as? DialogWindowProvider)?.window
             ?: (view.context as? Activity)?.window
             ?: (view.context as? ContextWrapper)?.baseContext?.let { it as? Activity }?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         val status = controller?.isAppearanceLightStatusBars
         val nav = controller?.isAppearanceLightNavigationBars
-        controller?.isAppearanceLightStatusBars = true
-        controller?.isAppearanceLightNavigationBars = true
+        controller?.isAppearanceLightStatusBars = light
+        controller?.isAppearanceLightNavigationBars = light
         onDispose {
             if (status != null) controller.isAppearanceLightStatusBars = status
             if (nav != null) controller.isAppearanceLightNavigationBars = nav
@@ -227,9 +238,12 @@ private fun DarkSystemBarIcons() {
     }
 }
 
-/** The iPod's finish: the white one, in either theme. */
+/** The iPod's finish, as the iPod colour setting has it, in either theme. */
 @Composable
-internal fun rememberIpodFinish(): IpodFinish = IpodFinish.White
+internal fun rememberIpodFinish(): IpodFinish {
+    val color by AppSettings.ipodColor.collectAsState()
+    return if (color == IpodColor.BLACK) IpodFinish.Black else IpodFinish.White
+}
 
 /**
  * The iPod itself: the body, the LCD up top and the wheel below, laid out the
@@ -243,7 +257,7 @@ internal fun IpodBody(
     wheel: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    DarkSystemBarIcons()
+    SystemBarIconsFor(finish)
     Box(
         modifier
             .fillMaxSize()
@@ -285,6 +299,8 @@ internal class IpodFinish(
     val label: Color,
     val center: List<Color>,
     val centerEdge: Color,
+    /** Whether the body is light enough to want dark system bar icons. */
+    val lightBody: Boolean,
 ) {
     companion object {
         val White = IpodFinish(
@@ -294,6 +310,7 @@ internal class IpodFinish(
             label = Color(0xFFA8A9AE),
             center = listOf(Color(0xFFF4F4F6), Color(0xFFFFFFFF)),
             centerEdge = Color(0xFFCFCFD4),
+            lightBody = true,
         )
         val Black = IpodFinish(
             body = listOf(Color(0xFF2A2A2D), Color(0xFF0E0E10)),
@@ -302,6 +319,7 @@ internal class IpodFinish(
             label = Color(0xFFDADADF),
             center = listOf(Color(0xFF151517), Color(0xFF242427)),
             centerEdge = Color(0xFF4A4A4F),
+            lightBody = false,
         )
     }
 }
@@ -441,6 +459,7 @@ internal fun IpodLcd(
 
 @Composable
 private fun TitleBar(title: String, isPlaying: Boolean?) {
+    val battery = rememberBatteryState()
     Box(
         Modifier
             .fillMaxWidth()
@@ -478,7 +497,7 @@ private fun TitleBar(title: String, isPlaying: Boolean?) {
             Modifier
                 .align(Alignment.CenterEnd)
                 .size(width = 22.dp, height = 10.dp),
-        ) { drawBattery() }
+        ) { drawBattery(battery) }
     }
 }
 
@@ -687,7 +706,7 @@ internal fun ClickWheel(
                     else -> 135f
                 }
                 drawArc(
-                    color = Color.Black.copy(alpha = 0.06f),
+                    color = if (finish.lightBody) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f),
                     startAngle = start,
                     sweepAngle = 90f,
                     useCenter = true,
@@ -784,13 +803,84 @@ private fun DrawScope.drawPauseGlyph(color: Color) {
     drawRect(color, Offset(size.width * 0.6f, 0f), Size(w, size.height))
 }
 
-private fun DrawScope.drawBattery() {
+/** The phone's own battery: how full, and whether it's on charge. */
+internal data class BatteryState(val level: Float, val charging: Boolean)
+
+/**
+ * Follows the phone's battery. The system re-sends its sticky battery
+ * broadcast on every change of level or plug, so registering is enough to have
+ * the current state at once and every change after it.
+ */
+@Composable
+private fun rememberBatteryState(): BatteryState {
+    val context = LocalContext.current
+    var state by remember { mutableStateOf(BatteryState(1f, false)) }
+    DisposableEffect(context) {
+        fun read(intent: Intent?) {
+            intent ?: return
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            state = BatteryState(
+                level = if (level >= 0 && scale > 0) (level.toFloat() / scale).coerceIn(0f, 1f) else state.level,
+                charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL,
+            )
+        }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = read(intent)
+        }
+        read(
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            ),
+        )
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+    return state
+}
+
+private fun DrawScope.drawBattery(battery: BatteryState) {
     val body = Size(size.width - 3.dp.toPx(), size.height)
+    val inset = 1.5.dp.toPx()
+    // The fill: green, going amber and then red as it runs down, the way the
+    // iPod's own gauge did.
+    val fill = when {
+        battery.charging || battery.level > 0.3f -> listOf(Color(0xFFB9F07A), Color(0xFF4FAE1B))
+        battery.level > 0.15f -> listOf(Color(0xFFFFE27A), Color(0xFFE0A81B))
+        else -> listOf(Color(0xFFFF9A8A), Color(0xFFD9301B))
+    }
     drawRoundRect(
-        brush = Brush.verticalGradient(listOf(Color(0xFFB9F07A), Color(0xFF4FAE1B))),
+        brush = Brush.verticalGradient(listOf(Color.White, Color(0xFFDDE1E6))),
         size = body,
         cornerRadius = CornerRadius(2.dp.toPx()),
     )
+    val fillWidth = (body.width - inset * 2) * battery.level.coerceAtLeast(0.06f)
+    drawRoundRect(
+        brush = Brush.verticalGradient(fill),
+        topLeft = Offset(inset, inset),
+        size = Size(fillWidth, body.height - inset * 2),
+        cornerRadius = CornerRadius(1.dp.toPx()),
+    )
+    if (battery.charging) {
+        // A bolt across the middle while it's plugged in.
+        val cx = body.width / 2
+        val h = body.height
+        val bolt = Path().apply {
+            moveTo(cx + h * 0.10f, h * 0.08f)
+            lineTo(cx - h * 0.30f, h * 0.56f)
+            lineTo(cx - h * 0.02f, h * 0.56f)
+            lineTo(cx - h * 0.12f, h * 0.92f)
+            lineTo(cx + h * 0.30f, h * 0.42f)
+            lineTo(cx + h * 0.02f, h * 0.42f)
+            close()
+        }
+        drawPath(bolt, Color.White)
+        drawPath(bolt, Color(0xFF3C4148), style = Stroke(0.6.dp.toPx()))
+    }
     drawRoundRect(
         color = Color(0xFF3C4148),
         size = body,
